@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 # check_article.py -- Markdown structure, style sanity, and reader-payoff checks
 
+import argparse
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
-# style-guide.md § 禁用表达清单 — AI 腔套话 + 书面词汇 + 空洞表达 + 夸张美学 + 模糊归因 + 助手感开场白
+# ai-flavor-patterns.md P0/P1 — AI 腔套话、书面填充、空洞表达、夸张归因和助手感开场白
 BANNED_EXPRESSIONS = [
     # AI 腔套话
     "在当今时代", "综上所述", "总的来说", "归根结底",
     "值得注意的是", "不难发现", "显而易见", "毋庸置疑", "毫无疑问", "可以说",
     "有助于", "使得", "从而实现",
     "首先…其次", "其次…最后",
+    "更重要的是", "与此同时", "从某种意义上说",
+    "这标志着", "这体现了", "这折射出", "这背后是",
     # 书面词汇
     "显著提升", "充分利用", "进行操作", "获取结果", "实现功能", "相关方案",
     # 空洞表达
@@ -150,7 +154,7 @@ def _is_link_block(block):
 
 
 def _check_structure(content):
-    """Check the title and Markdown heading hierarchy, not a fixed article template."""
+    """Enforce one H1, a sectioned longform layout, and a shallow heading tree."""
     errors = []
     clean = _strip_fenced_code(content)
     headings = []
@@ -164,11 +168,19 @@ def _check_structure(content):
         errors.append("完整文章应有且仅有一个 # 主标题，当前找到 " + str(h1_count) + " 个")
         print("[ERROR] Expected exactly one H1 title, found " + str(h1_count), file=sys.stderr)
 
+    h2_count = sum(level == 2 for level, _ in headings)
+    if h2_count == 0:
+        errors.append("完整文章至少要有一个 ## 主要章节")
+        print("[ERROR] Article requires at least one H2 section", file=sys.stderr)
+
     previous_level = 0
     circled = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"
     h4_next = {}
     heading_stack = []
     for level, title in headings:
+        if level > 4:
+            errors.append("标题层级不得超过 ####：" + title)
+            print("[ERROR] Heading depth above H4 at '" + title + "'", file=sys.stderr)
         if level > previous_level + 1:
             errors.append("标题层级跳级：" + title + " → Markdown 子标题应逐级展开")
             print("[ERROR] Heading level skipped at '" + title + "'", file=sys.stderr)
@@ -262,9 +274,32 @@ def _r2_promise(content):
 
 
 # --- R3: 产物证据 -----------------------------------------------------------
-def _r3_artifact_evidence(content):
+def _r3_artifact_evidence(content, article_type=None):
+    if article_type == "source-analysis":
+        # Source excerpts inside code examples are not article evidence.
+        prose = re.sub(r'`[^`\n]*`', '', _strip_fenced_code(content))
+        has_table = bool(re.search(
+            r'^[ \t]*\|[^\n]+\|[ \t]*\n[ \t]*\|[ \t:|\-]+\|[ \t]*\n'
+            r'[ \t]*\|[^\n]*[^\s|][^\n]*\|', prose, re.M,
+        ))
+        links = re.findall(r'(?<!!)\[[^\]\n]+\]\((https?://[^\s)]+)\)', prose, re.I)
+        has_source = False
+        for link in links:
+            try:
+                if urlparse(link).hostname:
+                    has_source = True
+                    break
+            except ValueError:
+                continue
+        missing = []
+        if not has_table:
+            missing.append("真实来源数据表（含数据行）")
+        if not has_source:
+            missing.append("正文 HTTP(S) 来源链接")
+        return ["[R3] source-analysis 缺少" + "、".join(missing)] if missing else []
+
     hits = sum(content.count(t) for t in R3_TRIGGER_TERMS)
-    if hits < 2:
+    if article_type not in {"hands-on", "evaluation", "integration"} and hits < 2:
         return []
     have_code = "```" in content
     have_photo = bool(re.search(r'!\[[^\]]*\]\([^)]*\.(?:png|jpe?g|webp|gif)(?:\)|["\'])', content, re.I))
@@ -279,8 +314,8 @@ def _r3_artifact_evidence(content):
         missing.append("数据表")
     if len(missing) >= 2:
         return [
-            "[R3] 文章属实测 / 接入类（触发词命中 " + str(hits) + " 次），但只配了手绘示意图，"
-            "缺少真实产物证据：" + "、".join(missing)
+            "[R3] 文章按实测 / 接入类检查（触发词命中 " + str(hits) + " 次），"
+            "缺少至少两类真实产物证据，未找到：" + "、".join(missing)
             + " → 至少补齐两项（代码块 / 真实截图 / 带口径的数据表）"
         ]
     return []
@@ -349,8 +384,9 @@ def _r5_closing_new_info(content):
     ]
 
 
-def check(path, strict=False):
-    content = Path(path).read_text(encoding="utf-8")
+def check(path, strict=False, article_type=None):
+    label = "标准输入" if str(path) == "-" else str(path)
+    content = sys.stdin.read() if str(path) == "-" else Path(path).read_text(encoding="utf-8")
     issues = []
     advisory = []
 
@@ -359,9 +395,10 @@ def check(path, strict=False):
     issues.extend(struct_errors)
     advisory.extend(struct_warnings)
 
-    # --- style checks (style-guide.md § 禁用表达清单) ---
+    # --- prose style checks (ignore fenced code examples) ---
+    style_content = _strip_fenced_code(content)
     for expr in BANNED_EXPRESSIONS:
-        count = content.count(expr)
+        count = style_content.count(expr)
         if count > 0:
             issues.append("含禁用表达「" + expr + "」（出现 " + str(count) + " 次）→ 建议替换为更自然的口语表达")
             print("[WARN] Banned expression '" + expr + "' found " + str(count) + " time(s)", file=sys.stderr)
@@ -371,40 +408,40 @@ def check(path, strict=False):
             issues.append("文件含审校报告标记「" + marker + "」→ 审校报告不得写入最终稿件，请删除")
             print("[ERROR] Review report marker '" + marker + "' found in article file", file=sys.stderr)
 
-    double_dash_count = content.count("——")
-    single_dash_count = content.replace("——", "").count("—")
+    double_dash_count = style_content.count("——")
+    single_dash_count = style_content.replace("——", "").count("—")
     dash_count = double_dash_count + single_dash_count
     if dash_count > 1:
         issues.append("破折号 / em dash 出现 " + str(dash_count) + " 次 → 每篇最多 1 处，优先改成句号、逗号或冒号")
         print("[WARN] Dash/em dash appears " + str(dash_count) + " time(s)", file=sys.stderr)
 
     for expr in CHATBOT_ARTIFACTS:
-        count = content.count(expr)
+        count = style_content.count(expr)
         if count > 0:
             issues.append("含聊天残留「" + expr + "」（出现 " + str(count) + " 次）→ 删除，不得进入最终稿")
             print("[ERROR] Chatbot artifact '" + expr + "' found " + str(count) + " time(s)", file=sys.stderr)
 
     for expr in GENERIC_FUTURE_CLOSERS:
-        count = content.count(expr)
+        count = style_content.count(expr)
         if count > 0:
             issues.append("含万能展望结尾「" + expr + "」（出现 " + str(count) + " 次）→ 改成具体事实或下一步行动")
             print("[WARN] Generic future closer '" + expr + "' found " + str(count) + " time(s)", file=sys.stderr)
 
     for expr in PROMO_INFLATION:
-        count = content.count(expr)
+        count = style_content.count(expr)
         if count > 0:
             issues.append("含宣传/夸张表达「" + expr + "」（出现 " + str(count) + " 次）→ 改成可验证事实")
             print("[WARN] Promotional inflation '" + expr + "' found " + str(count) + " time(s)", file=sys.stderr)
 
     for pattern in FALSE_DEPTH_PATTERNS:
-        matches = pattern.findall(content)
+        matches = pattern.findall(style_content)
         if matches:
             issues.append("发现 " + str(len(matches)) + " 处“不是 X 而是 Y / 与其说 X 不如说 Y”结构 → 只保留真正服务论证的一处，其余改成直接判断")
             for m in matches[:3]:
                 issues.append("  …" + m[:60] + "…")
             print("[WARN] False-depth construction found " + str(len(matches)) + " time(s)", file=sys.stderr)
 
-    bursts = SHORT_SENTENCE_BURST.findall(content)
+    bursts = SHORT_SENTENCE_BURST.findall(style_content)
     if bursts:
         issues.append("发现 " + str(len(bursts)) + " 处连续短句轰炸 → 合并成自然句，保留必要节奏点")
         print("[WARN] Short-sentence burst found " + str(len(bursts)) + " time(s)", file=sys.stderr)
@@ -413,7 +450,7 @@ def check(path, strict=False):
     reader_notes = []
     reader_notes.extend(_r1_cold_start(content))
     reader_notes.extend(_r2_promise(content))
-    reader_notes.extend(_r3_artifact_evidence(content))
+    reader_notes.extend(_r3_artifact_evidence(content, article_type))
     reader_notes.extend(_r4_self_set_params(content))
     for n in reader_notes:
         print(("[ERROR] " if strict else "[WARN] ") + n.split("\n")[0], file=sys.stderr)
@@ -437,20 +474,19 @@ def check(path, strict=False):
         return False
 
     if advisory:
-        print("【文章质量检查通过（含建议）】" + path)
+        print("【文章质量检查通过（含建议）】" + label)
         for w in advisory:
             print("  ⚠ " + w)
     else:
-        print("【文章质量检查通过】" + path)
+        print("【文章质量检查通过】" + label)
     return True
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    strict = "--strict" in sys.argv
-    if len(args) < 1:
-        print("用法：python check_article.py <article_md_path> [--strict]")
-        print("  --strict  把读者兑现门禁 R1-R4 升级为阻断项，R5 保留建议（Step 6 收尾时使用）")
-        sys.exit(1)
-    ok = check(args[0], strict=strict)
+    parser = argparse.ArgumentParser(description="检查 Markdown、口吻信号及读者兑现门禁")
+    parser.add_argument("path", help="文章路径；- 表示标准输入")
+    parser.add_argument("--strict", action="store_true", help="R1-R4 阻断；R5 保留建议")
+    parser.add_argument("--article-type", help="source-analysis / hands-on / evaluation / integration；省略或未知类型保留原保守检查")
+    args = parser.parse_args()
+    ok = check(args.path, strict=args.strict, article_type=args.article_type)
     sys.exit(0 if ok else 1)

@@ -1,75 +1,42 @@
-# open-source-guide.md — 开源分发说明
+# 开源分发说明
 
-## 仓库结构
+项目名称、Skill 名称、安装目录和 zip 根目录统一为 `guage-write-flow`。仓库只分发 `skill/` 内的写作能力，不包含图卡文案或配图生产流程。
 
-```
-ai-write-flow/
-├── skill/          # Skill 安装包（可分发内容）
-├── workspace/      # 本地运行时目录（不提交）
-├── docs/           # 设计文档（不进入安装副本）
-├── evals/          # 评估测试（不进入安装副本）
-├── scripts/        # 安装与打包脚本
-├── README.md       # 面向用户的说明文档
-└── LICENSE
-```
+安装命令、升级方式与职责边界见 [README](../README.md)。
 
-## 安装
+## 安装目标
 
-```bash
-# Hermes
-bash scripts/install.sh --tool hermes --workspace ~/Documents/workspace/ai-write-flow
-
-# Claude Code
-bash scripts/install.sh --tool claude-code --workspace ~/Documents/workspace/ai-write-flow
-
-# Codex
-bash scripts/install.sh --tool codex --workspace ~/Documents/workspace/ai-write-flow
-
-# 自定义 Agent Skills 目录
-bash scripts/install.sh --tool custom --skills-dir ~/.your-agent/skills --workspace ~/Documents/workspace/ai-write-flow
-
-# 交互式向导
-bash scripts/install.sh
-```
-
-安装脚本只复制 `skill/` 目录内容到目标 Agent 的 Skills 目录，不复制 workspace/、docs/、evals/。
-
-支持的安装目标：
-
-| 参数 | 默认目录 | 环境变量覆盖 |
-|------|---------|------------|
+| 参数 | 默认 Skills 目录 | 环境变量覆盖 |
+|---|---|---|
 | `--tool hermes` | `~/.hermes/skills` | `HERMES_SKILLS_DIR` |
 | `--tool claude-code` | `~/.claude/skills` | `CLAUDE_SKILLS_DIR` |
 | `--tool codex` | `~/.codex/skills` | `CODEX_HOME` |
-| `--tool custom` | 由 `--skills-dir` 指定 | — |
-| `--tool auto` | 自动检测已安装工具 | — |
+| `--tool custom` | `--skills-dir` 指定的目录 | — |
+| `--tool auto` | 检测后选择已安装工具 | — |
+| `--tool skip` | 不安装，只初始化 workspace | — |
 
-## 用户可定制文件
+安装脚本只同步分发包。已有同名安装会先询问是否覆盖；覆盖时删除已从分发包移除的文件，因此应先备份个人定制。旧名称 `ai-write-flow` 的安装副本不会自动删除，也不会移动已有工作区。
 
-安装后，以下文件可按个人需要调整：
+## 工作区配置
 
-| 文件 | 说明 |
-|------|------|
-| `references/persona.md` | 写作身份与风格偏好 |
-| `references/workspace-config.md` | 工作区路径与安全规则（`workspace-local.md` 不存在时的回退配置）|
-| `references/workspace-local.md` | 安装脚本自动生成，写入本机 workspace 路径；Step 1 优先读取此文件 |
-| `references/image-config.md`（可选）| 配图 API 配置（默认不启用）|
+安装时按 `--workspace`、`GUAGE_WRITE_FLOW_WORKSPACE`、旧变量 `AI_WRITE_FLOW_WORKSPACE`、交互输入的顺序选择目录，转换为绝对路径。
 
-## 工作区
+该路径同时写入安装副本的 `references/workspace-config.md`、`scripts/prepare_research.py` 和 `scripts/save_article.py`。不再生成或读取旧的 `workspace-local.md`。安装后的默认路径不依赖某个 Agent 进程临时设置的环境变量；改变目录时重新安装并传入新路径。
 
-Skill 安装目录和 workspace 是两回事：
+运行时用户明确指定的工作区优先。预检传入 `--workspace`；保存到另一工作区时传入 `--output-dir <workspace>/output`。没有执行安装时，源码默认使用 `~/Documents/workspace/guage-write-flow`。
 
-- **Skill 安装目录**（如 `~/.hermes/skills/ai-write-flow/` 或 `~/.claude/skills/ai-write-flow/`）：存放 SKILL.md 和 references，只读
-- **workspace** `/your/workspace/path/`：存放 briefs（输入素材）、research JSON、成品文章
+工作区包含：
 
-不要把敏感素材、API Key 或个人 briefs 提交到 Git。
+- `briefs/`：候选材料；按主题判断相关性，不因目录非空直接进入素材核验模式。
+- `research/`：仅在用户明确要求保存研究结果时写入。
+- `output/`：通过检查后的完整文章；审校报告不混入正文。
 
-## 环境变量
+安装和打包均不收集工作区内容。不要把个人素材、真实业务数据或凭据加入仓库。
 
-| 变量 | 说明 |
-|------|------|
-| `AI_WRITE_FLOW_WORKSPACE` | 指定运行时工作区路径（开源用户推荐配置）|
+## 维护与验证
 
-## 贡献
-
-欢迎 PR。修改 Skill 流程请同步更新 `evals/evals.json` 中的对应测试场景。
+- 修改写作能力时同步受影响的脚本、测试、README 和 `evals/evals.json`。
+- 版本写在 `skill/SKILL.md` 的 `metadata.version` 中，README badge 与发布包版本保持一致。
+- `quick_validate.py` 检查分发包基本字段及必需文件，不等同于完整 YAML schema 或行为校验。
+- 写作脚本单测验证可执行逻辑；`scripts/test_distribution.py` 验证安装路径、兼容变量、隔离保存和 zip 结构。
+- `evals/run_evals.py` 执行脚本场景并检查行为用例定义；工作流用例仍需真实 Agent 会话执行。

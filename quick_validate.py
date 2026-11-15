@@ -3,7 +3,7 @@
 
 检查 skill/ 目录的最小完整性：
   1. SKILL.md 存在且 frontmatter 包含必填字段（name、description）
-  2. frontmatter 不包含非法字段（如 version）
+  2. frontmatter 不包含顶层 version（版本放在 metadata.version）
   3. 必要的 references/ 文件均存在
   4. 必要的 scripts/ 文件均存在
 
@@ -31,15 +31,17 @@ REQUIRED_REFERENCES = [
     "persona.md",
     "workspace-config.md",
     "fact-policy.md",
-    "card-post-config.md",
-    "illustration-config.md",
+    "reader-payoff.md",
+    "title-naming.md",
+    "ai-flavor-patterns.md",
+    "human-voice-policy.md",
 ]
 
 REQUIRED_SCRIPTS = [
     "check_article.py",
     "validate_research.py",
-    "check_card_post.py",
-    "check_illustration_plan.py",
+    "prepare_research.py",
+    "save_article.py",
 ]
 
 
@@ -85,7 +87,7 @@ def validate(skill_dir: Path) -> list[str]:
             if field in fm:
                 errors.append(
                     f"SKILL.md frontmatter: forbidden field '{field}' present "
-                    f"(version belongs in README badge / Git tag, not SKILL.md)"
+                    f"(version belongs in metadata.version, not the top level)"
                 )
 
     for ref in REQUIRED_REFERENCES:

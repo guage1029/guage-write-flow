@@ -1,23 +1,81 @@
 # research-config.md — 调研行为规范
 
-> AI 执行 Step 2 调研时的机器可执行配置。不是给人读的文档，是行为约束。
+> Step 2 的调研行为与数据契约。机器门禁由 `scripts/validate_research.py` 实现。
 > 输出门禁（哪些 claim 可进入最终输出）见 `references/fact-policy.md`。
 
 ---
+
+## 搜索工具与执行顺序
+
+- 每个独立调研问题使用一个 `task_id`。默认 Tavily → Exa → Agent 内置 Web Search；不强制三种工具全跑。
+- Tavily 使用已配置的搜索工具或 `tvly search --json`；Exa 使用 `web_search_exa`；内置 Web 使用运行环境提供的搜索能力。不可用时记录 `unavailable` 和真实原因，不自动安装、登录或修改工具配置。本工作流的可用性检查与降级规则优先于搜索辅助 skill 的自动安装要求。
+- 前工具不可用、报错、无结果、无一手来源或证据不足时，记录对应 outcome 和 reason 后进入下一工具；不得跳级。前工具成功后，只有独立复核需要才换工具，并填写 `advance_reason: independent_crosscheck`。
+- 用户给出或素材包含的已知 URL 直接读取，记为 `discovered_by: direct`，无需为了填记录而搜索。
+- 搜索发现页面后读取来源原文：Tavily Extract、Exa Fetch 或内置 Web Fetch/Open。Tavily 搜索实际返回完整原文时可记为 `tavily_search_raw`，不重复抓取；摘要或 highlights 不算原文。full_text 表示读取原始页面内容，可为相关原文片段，不要求抓取整个站点。
+- 独立问题可以并行，但每个 task_id 内部保持上述顺序。该 skill 不自动要求组建多智能体团队。
+- 所有拟用于写作的事实必须关联成功读取的来源原文。工具排名不改变来源 Tier。
+- 每项拟用事实有来源、必要的交叉核查完成且无未解决差异时停止搜索；不足时只补查缺口。
+- 如所有工具都不可用，保留失败记录、报告阻塞，不伪造调研成功。
+
+**可验证边界：** 验证器检查 Agent 提交的记录及引用一致性，无法独立证明真实工具调用或来源权威性。不得虚构工具记录、读取状态或来源日期。
+
+## 每轮交付与校验
+
+规划 → 按问题执行 → 汇总核查 → 交付。开始前列出任务 ID、调研问题、已有材料和所需证据；默认展示后继续，方向不明时再澄清。
+
+JSON 在当前上下文保留，不默认落盘。每轮通过标准输入运行：
+
+```bash
+python3 {skill_root}/scripts/validate_research.py - --report
+```
+
+实际 JSON 从 stdin 传入；不要把示例占位符当成真实记录。脚本输出固定五部分：本轮目标、实际改动、验证结果、风险与阻塞、下一轮建议，以及独立计算的通过/失败结论。用户报告中用事实 ID 与来源链接说明结论；调研没有改文件时如实注明。
+
+退出码非零：仍可展示失败报告，停止进入选题/创作，修复后复查。`explore_mode` 允许 claims 为空；其线索不得直接作为发布事实。完整写作前仍须通过 publish/brief 核验。
+
+执行清单：任务范围明确；工具降级有记录；已读原文；事实可追溯；差异已解决；缺口已列出；校验通过后再交接。
 
 ## 执行模式
 
 | 模式 | 触发时机 | 门禁状态 |
 |------|---------|---------|
-| `brief_first_verify_mode` | Step 2，briefs/ 有内容时（**默认**） | Stage A→B→C 三段式，Stage C 有差异则阻断 |
-| `publish_mode` | Step 2，briefs/ 为空时（全量调研） | 全部 4 层生效，任一不达标则阻断 |
+| `brief_first_verify_mode` | Step 2，预检确认有本轮相关、读取成功的素材 | Stage A→B→C 三段式，Stage C 有差异则阻断 |
+| `publish_mode` | Step 2，无本轮相关素材；共享目录全是无关材料也适用 | 全部 4 层生效，任一不达标则阻断 |
 | `explore_mode` | Step 3 选题讨论（为角度探索提供线索） | 仅执行 Layer 1+2，不做 Claim 核查 |
+
+### 素材预检是模式的唯一计算入口
+
+先运行 `python3 {skill_root}/scripts/prepare_research.py inventory --workspace {workspace}`，再阅读、分类返回的候选。默认覆盖共享 briefs/ 的全部可见常规文件，忽略系统隐藏项；显式 selected_paths 则覆盖用户本轮选定的文件。脚本不做语义分类。
+
+将下列清单从 stdin 传给 `prepare_research.py route --workspace {workspace}`；sha256 必须复制对应 inventory 的实际值，不能使用占位符：
+
+```json
+{
+  "topic": "本次准确主题",
+  "materials": [
+    {
+      "path": "/absolute/workspace/briefs/actual-file.md",
+      "sha256": "实际 inventory 返回的 SHA-256",
+      "relevance": "irrelevant",
+      "read_status": "success",
+      "reason": "实际阅读后，与本次主题无关的具体理由",
+      "summary": "实际素材要点"
+    }
+  ]
+}
+```
+
+relevance 取 relevant/irrelevant/uncertain；read_status 取 success/failed。相关性由 Agent 根据用户任务判断并给理由；代码只验证清单、文件和路由一致性，不证明语义判断正确。未解析或待确认材料输出 unresolved_materials 和具体 issues、can_proceed=false；先由团队解决可修复问题，确需用户信息才提问，不能把无关旧资料当成本轮约束。
+
+明确选取文件时可运行 inventory --select /absolute/file（多个文件重复 --select），返回的非空 selected_paths 原样保留，可引用共享池外的真实文件。用户明确要求完全不用本地素材时才允许 selected_paths=[]，同时填写 selection_reason、selection_source_ref；引用真实指令，不可为方便而编造。脚本保留并校验字段完整性，不能独立认证对话授权。
+
+把 route 的完整 JSON 输出原样嵌入研究 JSON 的 preflight。validate_research.py 会重新盘点当前范围并计算哈希、mode、can_proceed，核对 topic 与本次研究一致；不能只提交自填 mode 或删除排除项。explore_mode 保留其探索模式，但仍携带同主题预检，不能借探索模式绕过未解决材料。旧研究数据不自动迁移；重新用于新稿前补充预检，历史记录不因读取被修改。
 
 ---
 
 ## brief_first_verify_mode 三段式规范
 
-用户素材（截图、手写数据、简报）定义为 **`Tier 1 Candidate`**，不是 `Tier 1 Final`。须经 Stage B 核查通过后才能升级为 `verified`。
+仅 preflight.usable_materials 中的本轮素材（截图、手写数据、简报）定义为 **`Tier 1 Candidate`**，不是 `Tier 1 Final`。须经 Stage B 核查通过后才能升级为 `verified`；excluded_materials 与 unresolved_materials 不进入候选事实。
 
 ### 高风险字段（Stage A 必须提取，Stage B 必须核查）
 
@@ -35,7 +93,7 @@
 - 只验证高风险字段，不机械跑与候选事实无关的 Layer
 - 外部来源按下方 Source Tiers 判断质量
 - 候选事实与外部来源**一致** → 标记 `verified`
-- **找不到**外部来源 → 标记 `unverified`（记录，不强制阻断，但正文须加归因标注）
+- **找不到**外部来源 → 候选保留 `unverified`，原断言移入 `excluded_claims`，不得靠归因直接写入正文；有其他已核实事实时可继续，否则阻断。弱化表达另立 claim 核验。
 - 候选事实与外部来源**矛盾** → 标记 `discrepancy`，**必须阻断**
 
 ### 差异门禁触发条件（任一满足即阻断）
@@ -86,7 +144,7 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
 
 ## Layer 3：Claim 级 JSON Schema
 
-调研结果必须输出为以下 JSON 结构，保存到 `workspace/research/{YYYYMMDD}-{topic-slug}.json`：
+调研结果使用以下 JSON 结构，并在当前写作上下文中保留。默认不写入文件；只有用户明确要求保存研究结果时，才按 `workspace-config.md` 的共享路径规则保存：
 
 ```json
 {
@@ -94,6 +152,18 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
   "topic_type": "product | concept | open-source | news",
   "research_date": "YYYY-MM-DD",
   "mode": "brief_first_verify_mode | publish_mode | explore_mode",
+  "preflight": {
+    "policy_version": "1",
+    "topic": "string",
+    "workspace": "/absolute/workspace",
+    "materials": [],
+    "mode": "publish_mode",
+    "can_proceed": true,
+    "usable_materials": [],
+    "excluded_materials": [],
+    "unresolved_materials": [],
+    "issues": []
+  },
   "freshness_policy": {
     "max_age_days": 30,
     "blocking": true
@@ -120,8 +190,13 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
     {
       "tier": 1,
       "title": "string",
-      "url": "string",
-      "source_date": "YYYY-MM-DD"
+      "url": "https://official.example/docs",
+      "source_date": "YYYY-MM-DD",
+      "task_id": "r001",
+      "discovered_by": "tavily",
+      "fetched_by": "web_fetch",
+      "fetch_status": "success",
+      "content_kind": "full_text"
     }
   ],
   "claims": [
@@ -129,7 +204,7 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
       "claim_id": "c001",
       "claim_text": "string",
       "tier": 1,
-      "source_url": "string",
+      "source_url": "https://official.example/docs",
       "source_date": "YYYY-MM-DD",
       "evidence_quote": "string",
       "status": "supported | unverified | contradicted"
@@ -142,17 +217,46 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
     "discrepancy_count": 0,
     "stale_source_count": 0,
     "passed": true
+  },
+  "search_attempts": [
+    {
+      "task_id": "r001",
+      "provider": "tavily",
+      "query": "string",
+      "outcome": "success",
+      "result_urls": [
+        "https://official.example/docs"
+      ]
+    }
+  ],
+  "excluded_claims": [],
+  "round_report": {
+    "goal": "本轮问题与范围",
+    "changes": "新增或修正的事实、来源；是否修改文件",
+    "verification": "检查与证据，未执行项如实说明",
+    "risks": "未解决问题；无则写无",
+    "next": "进入选题或具体补查任务"
   }
 }
 ```
 
 ---
 
+### 新增字段约束
+
+- preflight 必须是 prepare_research.py route 的完整实际输出；上例仅演示空候选形状，不可把占位路径直接当运行结果。需预检的相关文件一旦改变、新增或丢失，重新 inventory、阅读、分类和 route；显式选择范围之外的旧材料不影响该范围。
+- `search_attempts[]` 按真实发生顺序填写，按 task_id 分别检查顺序。provider 取 tavily/exa/web；outcome 取 success/unavailable/error/no_results/no_primary_source/insufficient_evidence。非 success 填 reason；成功结果包含 result_urls。
+- `sources[]` URL 唯一；搜索发现的 URL 必须对应 search_attempts 的 task_id、provider、result_urls。已知 URL 使用 direct。fetched_by 取 tavily_extract/exa_fetch/web_fetch/tavily_search_raw。
+- `claims[]` 仅包含可用的 supported 事实，claim_id 唯一，source_url 必须已登记，tier 和 source_date 与来源一致，evidence_quote 非空。候选与排除项不混入此数组。
+- `tier_1_candidates[]`、`discrepancies[]`、`excluded_claims[]` 均为必填数组，无则空数组。未解决的 discrepancy 阻断。
+- 非 explore 模式至少一条可用事实。空日期、未来日期、摘要证据、未知来源及不合格 Tier 均阻断。quality_check.passed 是提交声明，不能覆盖脚本独立检查结果。
+- 历史研究 JSON 允许保留旧的 `output_mode`、`card_safe_claims` 等图卡字段，不迁移历史记录，不豁免 `preflight`、来源与 30 天时效等通用门禁。
+
 ## Layer 4：时效门禁
 
 - **30 天统一硬门禁**，无例外
 - 背景材料可用旧资料，但必须显式标注 `"type": "background"`，**不得进入发布正文**
-- 任何来源没有明确日期 → 视为不合格，直接阻断
+- 任何用于核验的来源没有明确日期 → 视为不合格；列为缺口，不能编造日期。计算日期以 Asia/Shanghai 为准。
 
 ---
 
@@ -170,47 +274,3 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
 - 任何来源没有明确日期
 - `quality_check.passed == false`
 - 发布正文中出现未标注的旧资料
-
----
-
-## card_post 事实核查补充规则
-
-当 `output_mode == "card_post"` 时，在 Step 2 标准调研结果之上额外执行：
-
-### 额外输出字段
-
-研究 JSON 必须在标准字段之外，额外输出：
-
-```json
-{
-  "output_mode": "card_post",
-  "card_safe_claims": [
-    {
-      "claim_id": "c001",
-      "claim_text": "string",
-      "source_url": "string",
-      "source_type": "official_release | official_docs | official_website",
-      "status": "supported",
-      "can_use_in_card": true
-    }
-  ],
-  "excluded_claims": [
-    {
-      "claim_text": "string",
-      "reason": "未找到官方来源支撑 | 与官方来源矛盾 | 来源超过 30 天"
-    }
-  ]
-}
-```
-
-### 字段规则
-
-- `card_safe_claims[]`：从 `claims[]` 中筛选 `status == "supported"` 且 `tier in ["1", "2a"]` 的 claim，标记 `can_use_in_card: true`
-- `excluded_claims[]`：所有 `status != "supported"` 或 `tier not in ["1", "2a"]` 的 claim，必须列入此处并说明原因
-- 图卡每条要点必须可追溯到 `card_safe_claims[]` 中的某条 claim
-- `excluded_claims[]` 中的事实禁止出现在发布内容（【发布配文】与【图卡内容排版】）中（可在【事实核查摘要】的「不建议写入」栏提及）
-
-### 与标准调研的关系
-
-- card_post 不降低调研质量要求，标准 brief_first_verify_mode / publish_mode 的阻断条件同样有效
-- card_post 的额外字段是标准调研结果之上的派生输出，不替换原有 `claims[]`

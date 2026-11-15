@@ -34,14 +34,13 @@ REQUIRED_SCRIPT_INPUT = ["article_file", "check_command"]
 WORKFLOW_TRIGGER_KEYWORDS = [
     "Step 1", "Step 2", "Step 3", "Step 4", "Step 5", "Step 6",
     "审校", "降AI味", "降ai味", "briefs", "阻断",
-    "card_post", "图卡", "卡片", "贴图",
-    "事实核查", "核查", "excluded_claims", "card_safe_claims",
-    "配图", "illustration", "svg-architect", "diagram_type", "flowchart",
+    "事实核查", "核查", "excluded_claims",
+    "配图",
 ]
 
 # 用于识别触发路径的关键词（script 类）
 SCRIPT_TRIGGER_KEYWORDS = [
-    "check_article", "check_card_post", "exit", "ERROR", "通过", "失败", "校验",
+    "check_article", "exit", "ERROR", "通过", "失败", "校验",
 ]
 
 
@@ -226,7 +225,8 @@ def run(evals_path: Path) -> bool:
         return False
 
     print(f"【Eval 质量门禁检查通过】{evals_path}")
-    print(f"  已验证 {len(scenarios)} 个场景（workflow: {workflow_count}，script: {script_count}）")
+    print(f"  已检查 {len(scenarios)} 个用例定义，执行 {script_count} 个脚本场景")
+    print(f"  {workflow_count} 个工作流场景未实际运行，需独立 Agent 会话验收")
     return True
 
 

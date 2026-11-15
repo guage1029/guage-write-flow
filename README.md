@@ -1,260 +1,131 @@
-# ai-write-flow
+# guage-write-flow
 
-![version](https://img.shields.io/badge/version-v0.4.2-blue)
+![skill version](https://img.shields.io/badge/skill-v0.0.5-blue)
 
-技术博客写作 Agent Skill，适用于公众号长文、AI 工具评测、教程指南，以及公众号贴图 / 小红书图卡等场景。
+中文技术文章和公众号长文写作 Agent Skill。提供调研、选题、两阶段创作、多轮审校和 Markdown 交付，也支持直接审校已有文章、降低 AI 味。
 
-支持两种输出模式：
-- **longform_article**：从选题讨论、调研核查、骨架确认到正文撰写和多轮审校的完整 6 步写作流程，也支持对已有文章一键审校降 AI 味
-- **card_post**：事实核查 + 卡片数量决策 + 可直接复制到图卡生成系统的结构化图卡文案
+**职责边界：** 不提供图卡分卡文案、配图策划、图片生成或生成图片的回填。用户已有的截图仍可作为素材或证据读取、核验和引用。配图是独立任务，不影响文章流程单独完成。
 
-可选扩展：
-- **章节 SVG 配图**：基于 `##` 章节语义生成配图规划，确认后调用 svg-architect 逐张生成 SVG 并插入文章
+遵循 [Agent Skills 开放标准](https://agentskills.io/specification)。安装脚本支持 Hermes、Claude Code、Codex，以及通过 `--tool custom --skills-dir` 指定的其他 Agent Skills 目录。
 
-符合 [Agent Skills 开放标准](https://agentskills.io/specification)，支持 Hermes、Claude Code、Codex，以及通过 `--tool custom --skills-dir` 接入任意 Agent 工具。
+## 安装
 
----
-
-## 输出模式
-
-| 模式 | 用途 | 输出形态 |
-|------|------|---------|
-| `longform_article` | 公众号长文 / 技术博客 / 教程 / 深度评测 | 标准 Markdown 长文（.md） |
-| `card_post` | 公众号贴图 / 小红书图卡 / 图卡生成系统文案 | 结构化卡片文案（.txt），可直接复制 |
-
-Skill 在启动时（Step 0）自动识别用户意图，路由到对应模式：
-
-- 用户提到「图卡 / 贴图 / 卡片 / 小红书 / 1000 字以内」→ `card_post`
-- 其他情况 → `longform_article`
-- 用户传入已有文章要求审校 → 审校快捷入口（跳过模式路由）
-
----
-
-## 文章结构与读者兑现
-
-标题层级服务阅读导航，不套固定目录。文章使用一个 `#` 主标题，`##` / `###` / `####` 按内容语义组织，不强制统一编号或固定以「写在最后」收尾。章节 SVG 配图以普通 `##` 章节作为候选单元。
-
-完整写作流程在骨架阶段同时检查标题承诺映射和证据账单；正文审校增加 R1–R5 读者兑现门禁，覆盖核心对象冷启动、标题承诺、证据使用、自设参数披露和结尾新信息。完整稿落盘时，R1–R4 未通过会阻断；局部润色和只检查任务会报告缺口，不自动扩大改写范围。`check_article.py --strict` 会将 R1–R4 检查升级为阻断项。
-
----
-
-## 这个 Skill 解决什么问题
-
-- 每次写文章都要手动加载多个规则文件，启动成本高
-- 调研来源质量参差不齐，没有系统化的核查流程
-- 用户素材（截图、PDF）被当作最终事实，导致文章与官方描述出入
-- 写完稿子不知道从哪里开始降 AI 味，缺少操作性清单
-- AI 润色容易越改越“漂亮”，但把作者自己的语气和手迹抹掉
-- 个人写作风格配置零散，换工具就丢失
-
----
-
-## 快速安装
+需要 Bash、Python 3.9+ 和 rsync；打包另需 zip/unzip。Python 校验脚本仅使用标准库，`quick_validate.py` 有 PyYAML 时会使用它解析 frontmatter。
 
 ```bash
-git clone https://github.com/zhaodl1983/ai-write-flow.git
-cd ai-write-flow
+git clone https://github.com/guage1029/guage-write-flow.git
+cd guage-write-flow
 
-# Hermes
-bash scripts/install.sh --tool hermes --workspace ~/Documents/workspace/ai-write-flow
+# 选择一种安装目标；workspace 可以使用已有稿件目录
+bash scripts/install.sh --tool codex --workspace ~/Documents/workspace/writing
+# bash scripts/install.sh --tool claude-code --workspace ~/Documents/workspace/writing
+# bash scripts/install.sh --tool hermes --workspace ~/Documents/workspace/writing
+# bash scripts/install.sh --tool custom --skills-dir ~/.your-agent/skills --workspace ~/Documents/workspace/writing
 
-# Claude Code
-bash scripts/install.sh --tool claude-code --workspace ~/Documents/workspace/ai-write-flow
-
-# Codex
-bash scripts/install.sh --tool codex --workspace ~/Documents/workspace/ai-write-flow
-
-# 自定义 Agent Skills 目录
-bash scripts/install.sh --tool custom --skills-dir ~/.your-agent/skills --workspace ~/Documents/workspace/ai-write-flow
-
-# 交互式向导（不传参数）
-bash scripts/install.sh
+# 不传参数时使用交互式安装向导；--tool auto 可检测已安装工具
+# bash scripts/install.sh
 ```
 
-安装向导支持 Hermes / Claude Code / Codex / Custom 四种目标，以及 `--tool auto` 自动检测已安装工具。
+Skill 安装到目标 Skills 目录下的 `guage-write-flow/`。安装目录存放指令与脚本，工作区独立存放输入材料和成品文章。
 
-> **workspace 路径说明**：workspace 与 Skill 安装目录是两回事——安装脚本只复制 `skill/` 内容，workspace 独立存放 briefs（输入素材）、research JSON 和成品文章。
->
-> workspace 解析优先级：**`--workspace` 参数 > 环境变量 `AI_WRITE_FLOW_WORKSPACE` > 交互询问**
->
-> ```bash
-> export AI_WRITE_FLOW_WORKSPACE=/your/workspace/path
-> ```
+安装时工作区选择顺序：`--workspace` → `GUAGE_WRITE_FLOW_WORKSPACE` → 旧变量 `AI_WRITE_FLOW_WORKSPACE` → 交互询问。环境变量用于安装时选择目录；安装脚本将绝对路径绑定到安装副本的 `references/workspace-config.md`、预检脚本和保存脚本。
 
----
+运行时读取安装副本的工作区配置；用户在任务中明确指定的路径优先。另选工作区时，保存命令应传 `--output-dir <工作区>/output`，与预检使用同一目录。直接使用未安装的源码时，默认工作区为 `~/Documents/workspace/guage-write-flow`。
+
+### 从 ai-write-flow 更新
+
+项目和安装目录现在统一命名为 `guage-write-flow`。已有 Git 检出可更新远端地址：
+
+```bash
+git remote set-url origin https://github.com/guage1029/guage-write-flow.git
+```
+
+重新安装时可继续传原有 workspace 路径，例如 `~/Documents/workspace/ai-write-flow`，无需移动素材或文章。脚本不会自动删除旧的 `ai-write-flow` 安装目录；确认新版本可用后，自行停用旧 skill，避免同名能力重复匹配。覆盖已有 `guage-write-flow` 安装前会询问；覆盖会同步分发包并清除已移除的规则文件，请先备份个人定制。
+
+## 使用
+
+完整写作：
+
+```text
+使用 guage-write-flow，帮我写一篇关于 MCP 工具开发的文章。
+```
+
+已有文章审校：
+
+```text
+帮我审校这篇文章，降低 AI 味，保留我的表达和已有截图。
+```
+
+只检查：
+
+```text
+只检查这篇文章的问题，先别改正文。
+```
+
+审校快捷入口跳过 Steps 1–4，直接进入 Step 5。局部润色只报告结构或证据缺口，不擅自扩写、追加事实或重做选题；只检查时不输出修订全文、不落盘。
+
+## 长文主流程
+
+| 步骤 | 行为 | 进入下一步的条件 |
+|---|---|---|
+| Step 1 工作区与素材 | 盘点文件、读取内容、判断本轮相关性并保留哈希，生成 preflight | 清单完整，读取与相关性缺口已处理 |
+| Step 2 调研核验 | 核查来源原文、可用事实、排除项和差异，运行 JSON 校验 | 校验通过，未解决差异不得放行 |
+| Step 3 选题 | 给出选题、标题、证据要求和工作量 | 用户选定选题与工作标题 |
+| Step 4 两阶段创作 | 先确认骨架和三份清单，再写正文 | 骨架获确认；三份清单齐全 |
+| Step 5 多轮审校 | R1–R5 读者兑现、内容、口吻、作者手迹、AI 味与格式检查 | 完整稿通过规定门禁 |
+| Step 6 交付 | 默认保存 Markdown，报告绝对路径 | strict 校验通过并写入成功 |
+
+调研按**本轮素材的相关性和可读性**选择模式：有相关可读素材用 `brief_first_verify_mode`，没有则用 `publish_mode`；共享目录非空不代表材料与本轮相关。读取失败或相关性待确认时先解决缺口。旧研究 JSON 重新使用前仍须补预检、检查来源与时效。
+
+骨架阶段必须包含【读者兑现映射表】【证据账单】【自设参数清单】。R1–R4 覆盖冷启动、标题承诺、证据使用和自设参数披露，完整稿不通过时返工；R5 检查结尾是否提供新信息。
+
+实测、接入和评测文章需要真实产物证据。明确为 `source-analysis` 的资料解析需要真实来源数据表和正文 HTTP(S) 来源链接，不能冒充作者亲测。检查脚本只能识别已编码的结构、格式和证据形式，不能证明图片真实、来源可靠或文章已经接近作者口吻。
+
+## 输出与个人定制
+
+- 完整长文默认保存到 `<workspace>/output/YYYYMMDD-title-slug.md`，日期使用 Asia/Shanghai；重名追加序号，禁止覆盖。
+- 用户要求只在对话中交付时不保存。审校结果、骨架和研究 JSON 默认留在对话中，明确要求保存时才写文件。
+- 审校报告不写入最终文章文件。运行产物不得写入 skill 安装目录。
+- 新文章默认参考瓜哥的作者画像；安装后可修改 `references/persona.md`。已有文章优先保留原作者声音。
+- 调整工作区时重新运行安装脚本，以同步规则与脚本默认路径。
 
 ## 仓库结构
 
-```
-ai-write-flow/
-├── skill/                    # Skill 安装包（唯一可分发内容）
-│   ├── SKILL.md              # 主入口：Step 0 路由 + 图卡流程 + 长文 6 步流程 + 审校入口
-│   ├── references/           # 运行时规则文件（AI 按需加载）
-│   │   ├── fact-policy.md       # 全局事实核验输出门禁（两种模式共享）
-│   │   ├── reader-payoff.md     # R1–R5 读者兑现门禁
-│   │   ├── title-naming.md      # 标题候选、承诺与最终发布检查
-│   │   ├── research-config.md   # 调研行为规范（Layer 1-4 + 时效门禁 + card_post 补充）
-│   │   ├── card-post-config.md  # 图卡模式：字数/卡片数/输出格式/事实规则
-│   │   ├── illustration-config.md  # 章节 SVG 配图扩展：语义分类/风格映射/配图流程
-│   │   ├── style-guide.md       # 写作风格硬约束（禁用词、句长、结构）
-│   │   ├── checklist.md         # 多轮审校清单（含图卡模式审校）
-│   │   ├── ai-flavor-patterns.md  # 中文 AI 味检测规则（P0/P1/P2 + 二次扫描）
-│   │   ├── human-voice-policy.md  # 作者手迹保护规则（少动、保毛边、不写金句）
-│   │   ├── persona.md           # 作者画像（可个人定制）
-│   │   └── workspace-config.md  # 工作区路径与安全规则（回退配置；workspace-local.md 由 install.sh 生成，不进入源码包）
-│   ├── assets/
-│   │   └── brief-template.md    # 写作素材简报模板
-│   └── scripts/              # 质量校验脚本
-│       ├── validate_research.py      # 校验调研 JSON schema 与时效
-│       ├── check_article.py          # 校验成品文章风格、Markdown 层级与 R1–R5
-│       ├── test_check_article.py     # 标题解析和读者兑现检查用例
-│       ├── check_card_post.py        # 校验图卡文案（字数/卡片数/要点/高风险词）
-│       └── check_illustration_plan.py  # 校验配图计划 JSON（生成 SVG 前运行）
-├── workspace/                # 本地运行时目录（不提交 Git）
-│   ├── briefs/               # INPUT：写作素材（PDF、MD、截图等）
-│   ├── research/             # OUTPUT：调研 JSON
-│   ├── output/               # OUTPUT：成品文章 .md + 图卡文案 .txt
-│   └── images/               # OUTPUT：章节 SVG 配图（可选）
-├── evals/                    # 评估测试（不进入安装副本）
-│   ├── evals.json            # 场景用例定义（含 card_post + illustration 场景）
-│   ├── run_evals.py          # 可执行质量门禁
-│   └── files/                # 测试素材文件
-├── docs/                     # 设计决策文档
-├── scripts/
-│   ├── install.sh            # 安装向导
-│   └── package-skill.sh      # 打包为可分发 zip
-├── README.md
+```text
+guage-write-flow/
+├── skill/                  # 可分发的 skill，安装时只复制此目录
+│   ├── SKILL.md
+│   ├── references/         # 事实、调研、作者声音、审校及工作区规范
+│   ├── assets/brief-template.md
+│   └── scripts/           # prepare_research、validate_research、check_article、save_article 及测试
+├── scripts/               # 安装、打包与分发自检
+├── evals/                 # 行为用例定义与脚本场景校验
+├── docs/open-source-guide.md
+├── quick_validate.py      # 分发包基础结构检查
 └── LICENSE
 ```
 
-> **安装目录**（如 `~/.claude/skills/ai-write-flow/`）和 **workspace** 是两回事。安装脚本只复制 `skill/` 内容，workspace 独立存在于你自己的路径下，运行产物不进入 Skill 目录。
-
----
-
-## 用户可定制文件
-
-安装后，按需调整安装目录里的副本（如 `~/.hermes/skills/ai-write-flow/references/` 或 `~/.claude/skills/ai-write-flow/references/`）：
-
-| 文件 | 说明 | 建议 |
-|------|------|------|
-| `persona.md` | 写作身份、目标读者、发布平台、语气偏好 | 建议改 |
-| `workspace-config.md` | 工作区路径与安全规则（回退配置，`workspace-local.md` 不存在时使用）| 开源用户改 |
-
-> `persona.md` 是软配置，`style-guide.md` 中的硬约束优先级更高，冲突时以 `style-guide.md` 为准。
-
----
-
-## 触发方式
-
-### 完整写作流程（longform_article，6 步）
-
-```
-帮我写一篇关于 Claude Code 的 MCP 工具开发的文章
-```
-
-Skill 自动执行：解析工作区 → 检查 briefs → 调研核查 → 选题确认 → 两阶段创作 → 多轮审校 → 落盘输出。
-
-### 审校快捷入口（降 AI 味）
-
-将已有文章粘贴进对话：
-
-```
-帮我审校这篇文章，降低 AI 味
-```
-
-跳过 Steps 0-4，直接进入多轮审校（内容 → 作者手迹保护 → AI 味检测/降噪 → 细节 → 二次扫描）。
-
-审校时会额外执行：
-- 作者手迹保护：少动、保留合理毛边，不把真人表达改成文案腔
-- AI 味检测：按 P0/P1/P2 标记聊天残留、假深刻结构、意义拔高、机械转场等问题
-- 二次扫描：只检查本轮改动过的句子，避免润色时新增 AI 味
-- detect-only：用户说“只检查/先别改”时，只输出检测报告，不重写全文
-
-### 图卡文案（card_post）
-
-```
-帮我给 Hermes Agent v0.16 出一套图卡，可以复制到图卡生成系统，不超过 1000 字
-```
-
-```
-帮我做一套小红书图卡，介绍这个工具的 3 个核心功能
-```
-
-Skill 自动执行：调研核查（事实核查摘要）→ 卡片数量决策 → 生成可直接复制的图卡文案 → 落盘输出（.txt）。
-
-### 章节 SVG 配图（可选扩展）
-
-```
-给这篇文章按章节生成 SVG 配图，先给我配图大纲，确认后再生成
-```
-
-流程：
-1. 解析文章 `##` 章节，排除开头段落和 `## 写在最后`
-2. 提取每章核心观点和关键词，判断图表类型（流程图 / 对比图 / 分层架构图 / 概念图等）
-3. 输出【章节配图规划】表格，等待用户确认
-4. 确认后调用 svg-architect 逐张生成 `wechat_article` SVG（1200×500）
-5. 将图片引用插入文章对应章节（普通 `##` 标题之后、第一个 `###` 小节之前）
-
----
-
-## 工作流概览
-
-### longform_article 模式
-
-| Step | 名称 | 核心行为 | 阻断条件 |
-|------|------|---------|---------|
-| Step 0 | 输出模式路由 | 识别用户意图，路由到 longform_article | 无 |
-| Step 1 | 工作区 & 素材检查 | 解析 workspace → 加载 briefs，生成材料清单 | 无法解析 workspace |
-| Step 2 | 调研 | briefs 有内容用三段式核查；无内容跑全量 Layer 1-4 | 质量检查不通过 / 发现差异 |
-| Step 3 | 选题讨论 | 生成 3-4 个方向，含工作量 / 测试需求 | 用户未确认选题 |
-| Step 4 | 两阶段创作 | 骨架确认（含标题兑现表、证据账单）→ 正文填充 | 骨架未获用户确认 |
-| Step 5 | 多轮审校 | R1–R5 读者兑现 → 内容 → 作者手迹 → AI 味 → 细节 → 二次扫描 | 完整稿 R1–R4 不通过时阻止落盘 |
-| Step 6 | 落盘输出 | 保存到 `workspace/output/{date}-{slug}.md` | 文件写入失败 |
-
-### card_post 模式
-
-| Step | 名称 | 核心行为 | 阻断条件 |
-|------|------|---------|---------|
-| Step 0 | 输出模式路由 | 识别图卡意图，加载 card-post-config.md + fact-policy.md | 无 |
-| Step 1 | 工作区 & 素材检查 | 同 longform_article | 无法解析 workspace |
-| Step 2 | 调研与核查 | 同 longform_article + 输出 card_safe_claims / excluded_claims | 质量检查不通过 / 发现差异 |
-| Step 3 | 卡片草稿 | 卡片数量决策 → 用户确认 → 生成图卡文案 | 用户未确认卡片数量 |
-| Step 4 | 落盘输出 | 保存到 `workspace/output/{date}-card-{slug}.txt` | 文件写入失败 |
-
-### Step 2 调研核查机制
-
-| 模式 | 触发条件 | 行为 |
-|------|---------|------|
-| `brief_first_verify_mode` | briefs/ 有内容 | Stage A 提取候选事实 → Stage B 定点核查高风险字段 → Stage C 差异报告（有差异则阻断） |
-| `publish_mode` | briefs/ 为空 | Layer 1-4 全量调研，30 天时效门禁，任一 claim 不达标则阻断 |
-
----
-
-## 校验脚本
+## 验证与打包
 
 ```bash
-# 校验调研 JSON（schema 完整性 + 时效门禁）
-python3 skill/scripts/validate_research.py workspace/research/YYYYMMDD-topic.json
-
-# 校验成品文章（禁用词 + 长句 + 结构完整性）
-python3 skill/scripts/check_article.py workspace/output/YYYYMMDD-title.md
-
-# 校验图卡文案（字数 + 卡片数 + 要点数 + 高风险词 + 必要区块）
-python3 skill/scripts/check_card_post.py workspace/output/YYYYMMDD-card-topic.txt
-
-# 运行 eval 质量门禁
-python3 evals/run_evals.py
+python3 quick_validate.py
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skill/scripts -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_distribution.py
+PYTHONDONTWRITEBYTECODE=1 python3 evals/run_evals.py
+bash scripts/package-skill.sh dist 0.0.5
 ```
 
----
+`evals/run_evals.py` 校验用例结构、文件引用并执行脚本场景；**不会实际运行 Agent 多轮对话**。行为场景需要在独立会话中验收，不能将用例定义检查通过当成行为测试通过。
 
-## 安全提示
+调研 JSON、文章检查均支持 stdin，例如：
 
-- 不要把 `briefs/` 中的敏感素材或 API Key 提交到 Git（`.gitignore` 已覆盖 workspace/ 运行时内容）
-- 不要把 workspace 路径硬编码在 Skill 安装文件里
-- 配图 API Key 只读取环境变量，不写入任何文件
+```bash
+python3 skill/scripts/validate_research.py - --report < research.json
+python3 skill/scripts/check_article.py - --strict --article-type source-analysis < article.md
+python3 skill/scripts/save_article.py --article-type source-analysis --output-dir /your/workspace/output < article.md
+```
 
----
+不要提交个人素材、运行产物、密钥或凭据；默认作者画像可按需调整，测试素材中的数字和产品表述不能当作发布事实。
 
 ## 许可证
 
