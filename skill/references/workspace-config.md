@@ -15,7 +15,7 @@ Resolve the runtime workspace at the start of every session using this priority 
 1. If the user explicitly provides a workspace path in this conversation → use that path
 2. Otherwise → use the shared default workspace above
 
-The final Markdown for a completed longform article is saved by default after Step 5 passes. Research JSON, outlines, and review reports are not saved by default. Do not write runtime files into the installed Skill directory.
+The final Markdown for a completed longform article is saved by default after Step 5 passes. Research JSON, outlines, and review reports are not saved by default. Do not write runtime files into the installed Skill directory. Draft/rewrite/review records use a system temporary directory and are cleaned after completion unless retention is requested. Authorized maintenance of the persistent style handbook and its Skill patch version is a separate exception; follow style-guide.md and do not publish private feedback.
 
 ## Runtime Directories
 

@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
+from review_style import validate_review_files
+
 # ai-flavor-patterns.md P0/P1 — AI 腔套话、书面填充、空洞表达、夸张归因和助手感开场白
 BANNED_EXPRESSIONS = [
     # AI 腔套话
@@ -384,7 +386,7 @@ def _r5_closing_new_info(content):
     ]
 
 
-def check(path, strict=False, article_type=None):
+def check(path, strict=False, article_type=None, draft=None, review=None):
     label = "标准输入" if str(path) == "-" else str(path)
     content = sys.stdin.read() if str(path) == "-" else Path(path).read_text(encoding="utf-8")
     issues = []
@@ -463,6 +465,12 @@ def check(path, strict=False, article_type=None):
     for n in closing_notes:
         print("[WARN] " + n.split("\n")[0], file=sys.stderr)
 
+    if draft is not None or review is not None:
+        review_errors = validate_review_files(draft, review, content)
+        issues.extend(review_errors)
+        for error in review_errors:
+            print("[ERROR] Style review: " + error, file=sys.stderr)
+
     if issues:
         print("\n【文章质量检查报告】")
         for issue in issues:
@@ -474,11 +482,15 @@ def check(path, strict=False, article_type=None):
         return False
 
     if advisory:
-        print("【文章质量检查通过（含建议）】" + label)
+        print("【机械检查通过（含建议）】" + label)
         for w in advisory:
             print("  ⚠ " + w)
     else:
-        print("【文章质量检查通过】" + label)
+        print("【机械检查通过】" + label)
+    if draft is not None and review is not None:
+        print("【风格审校记录校验通过】覆盖与稿件绑定有效；口吻质量仍须按手册实际审校。")
+    else:
+        print("尚未核验风格审校记录；机械检查通过不代表可交付终稿。")
     return True
 
 
@@ -487,6 +499,10 @@ if __name__ == "__main__":
     parser.add_argument("path", help="文章路径；- 表示标准输入")
     parser.add_argument("--strict", action="store_true", help="R1-R4 阻断；R5 保留建议")
     parser.add_argument("--article-type", help="source-analysis / hands-on / evaluation / integration；省略或未知类型保留原保守检查")
+    parser.add_argument("--draft", help="风格审校前的完整初稿")
+    parser.add_argument("--review", help="逐段改写与全文复查后的 JSON 审校记录")
     args = parser.parse_args()
-    ok = check(args.path, strict=args.strict, article_type=args.article_type)
+    if bool(args.draft) != bool(args.review):
+        parser.error("--draft 与 --review 必须同时提供")
+    ok = check(args.path, strict=args.strict, article_type=args.article_type, draft=args.draft, review=args.review)
     sys.exit(0 if ok else 1)

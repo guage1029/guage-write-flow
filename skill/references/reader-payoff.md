@@ -88,7 +88,7 @@
 
 **官方资料深度解析（`source-analysis`）：** 选题和骨架明确仅分析已核验资料、没有作者实测或接入承诺时，R3 要求正文同时有真实来源数据表（含数据行、口径）和 HTTP(S) 来源链接，不要求作者代码或截图。表格与链接的真实性由事实核验和独立审校负责，脚本仅检查存在性；不要把资料分析写成亲测。
 
-检查时显式传 `check_article.py - --strict --article-type source-analysis`，保存时传 `save_article.py --article-type source-analysis`，由保存脚本透传类型。`hands-on` / `evaluation` / `integration` 仍强制至少两类真实产物；未指定或未知类型保留原触发词保守检查。不以改类型绕过证据要求，其他 strict 门禁始终执行。
+交付检查显式传 `check_article.py - --strict --article-type source-analysis --draft {temp}/draft.md --review {temp}/review.json`，保存时传 `save_article.py --article-type source-analysis --draft {temp}/draft.md --review {temp}/review.json`，由保存脚本透传类型与审校记录。风格记录按 style-review.md 执行，资料解析不能豁免语气改写。`hands-on` / `evaluation` / `integration` 仍强制至少两类真实产物；未指定或未知类型保留原触发词保守检查。不以改类型绕过证据要求，其他 strict 门禁始终执行。
 
 ---
 
@@ -135,7 +135,7 @@
 | Step 3 选题 | 本文件 | 生成选题时先过 R2 的「承诺—落点」预判；选题方向表新增「读者冷启动一句话」和「产物证据计划」两行 |
 | Step 4 骨架 | 本文件 | 第一阶段必须输出【读者兑现映射表】（R2）和【证据账单】（R3）；不通过不进入正文 |
 | Step 5 审校 | 本文件 | 第一遍内容审校前 5 项固定为 R1–R5，逐项判定并写入审校报告 |
-| 完整稿交付 | `scripts/save_article.py` → `scripts/check_article.py` | 完整长文默认保存前运行 strict；`R*` 检查项非零退出须先修订 |
+| 完整稿交付 | `scripts/save_article.py` → `scripts/check_article.py` | 完整长文保存或对话交付前都核验风格审校记录；保存前另运行 strict，非零退出须先修订 |
 
 ## 豁免
 

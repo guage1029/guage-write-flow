@@ -61,9 +61,9 @@ def requested_path(value, title):
     return path
 
 
-def validate(content, destination, article_type=None):
+def validate(content, destination, draft, review, article_type=None):
     checker = SKILL_ROOT / "scripts" / "check_article.py"
-    command = [sys.executable, str(checker), "-", "--strict"]
+    command = [sys.executable, str(checker), "-", "--strict", "--draft", str(draft), "--review", str(review)]
     if article_type is not None:
         command.extend(["--article-type", article_type])
     result = subprocess.run(
@@ -98,6 +98,8 @@ def main():
     parser.add_argument("--output", help="explicit destination file; takes precedence over the default path")
     parser.add_argument("--output-dir", help="explicit destination directory; keeps the default date-title filename")
     parser.add_argument("--article-type", help="pass the explicit article type to the strict checker")
+    parser.add_argument("--draft", required=True, help="风格审校前的完整初稿")
+    parser.add_argument("--review", required=True, help="全部问题处理并逐段复查后的风格审校 JSON")
     args = parser.parse_args()
     if args.output and args.output_dir:
         parser.error("use only one of --output or --output-dir")
@@ -112,7 +114,7 @@ def main():
     except ValueError as exc:
         parser.error(str(exc))
 
-    if not validate(content, destination, article_type=args.article_type):
+    if not validate(content, destination, args.draft, args.review, article_type=args.article_type):
         print("未保存：严格校验未通过。", file=sys.stderr)
         return 1
     try:

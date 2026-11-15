@@ -1,6 +1,6 @@
 # guage-write-flow
 
-![skill version](https://img.shields.io/badge/skill-v0.0.5-blue)
+![skill version](https://img.shields.io/badge/skill-v0.0.8-blue)
 
 中文技术文章和公众号长文写作 Agent Skill。提供调研、选题、两阶段创作、多轮审校和 Markdown 交付，也支持直接审校已有文章、降低 AI 味。
 
@@ -64,6 +64,18 @@ git remote set-url origin https://github.com/guage1029/guage-write-flow.git
 
 审校快捷入口跳过 Steps 1–4，直接进入 Step 5。局部润色只报告结构或证据缺口，不擅自扩写、追加事实或重做选题；只检查时不输出修订全文、不落盘。
 
+## 必做的风格审校与手册迭代
+
+初稿、语气改写、全文复查是三个独立阶段。新写长文按当前 `style-guide.md` 逐段打磨：有多少问题就处理多少，直到全部问题解决，不按“至少改 3–5 处”、改写比例或迭代轮数过关。已有文章仍按用户范围保护原作者声音。
+
+每次执行都复盘风格手册；在用户已授权持续维护的环境中，根据用户明确反馈、亲自修改或确认的样文修订规则。无新依据时保持规则并报告复盘结论，不把 Agent 自评或骨架确认当成瓜哥的风格偏好。具体规则集中在 `style-guide.md`，身份背景保留在 `persona.md`。
+
+交付前需有真实初稿及已完成的审校记录，覆盖终稿全部 Markdown 块、六项口吻证据、全部问题处理和手册复盘，并绑定初稿、终稿及当前规则哈希。模板默认全部待审。`save_article.py` 不再接受只有正文的调用；缺记录、待审、漏项、未解决问题或哈希过期均拒绝保存。只在对话交付终稿也要核验同一记录。
+
+`check_article.py` 的成功输出是“机械检查通过”，不是风格认证。记录校验只能验证覆盖与一致性，不能证明 Agent 的语义判断真实或文章已经像瓜哥；不得批量填通过或绕过入口直接写文件。
+
+执行步骤、临时文件清理与记录字段见 [风格审校契约](skill/references/style-review.md)。
+
 ## 长文主流程
 
 | 步骤 | 行为 | 进入下一步的条件 |
@@ -72,7 +84,7 @@ git remote set-url origin https://github.com/guage1029/guage-write-flow.git
 | Step 2 调研核验 | 核查来源原文、可用事实、排除项和差异，运行 JSON 校验 | 校验通过，未解决差异不得放行 |
 | Step 3 选题 | 给出选题、标题、证据要求和工作量 | 用户选定选题与工作标题 |
 | Step 4 两阶段创作 | 先确认骨架和三份清单，再写正文 | 骨架获确认；三份清单齐全 |
-| Step 5 多轮审校 | R1–R5 读者兑现、内容、口吻、作者手迹、AI 味与格式检查 | 完整稿通过规定门禁 |
+| Step 5 多轮审校 | R1–R5、独立逐段语气改写、全文复查、手册复盘、作者手迹与格式检查 | 全部问题处理、六项口吻及全文覆盖完成 |
 | Step 6 交付 | 默认保存 Markdown，报告绝对路径 | strict 校验通过并写入成功 |
 
 调研按**本轮素材的相关性和可读性**选择模式：有相关可读素材用 `brief_first_verify_mode`，没有则用 `publish_mode`；共享目录非空不代表材料与本轮相关。读取失败或相关性待确认时先解决缺口。旧研究 JSON 重新使用前仍须补预检、检查来源与时效。
@@ -97,7 +109,7 @@ guage-write-flow/
 │   ├── SKILL.md
 │   ├── references/         # 事实、调研、作者声音、审校及工作区规范
 │   ├── assets/brief-template.md
-│   └── scripts/           # prepare_research、validate_research、check_article、save_article 及测试
+│   └── scripts/           # prepare_research、validate_research、review_style、check_article、save_article 及测试
 ├── scripts/               # 安装、打包与分发自检
 ├── evals/                 # 行为用例定义与脚本场景校验
 ├── docs/open-source-guide.md
@@ -112,7 +124,7 @@ python3 quick_validate.py
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skill/scripts -p 'test_*.py' -v
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_distribution.py
 PYTHONDONTWRITEBYTECODE=1 python3 evals/run_evals.py
-bash scripts/package-skill.sh dist 0.0.5
+bash scripts/package-skill.sh dist 0.0.8
 ```
 
 `evals/run_evals.py` 校验用例结构、文件引用并执行脚本场景；**不会实际运行 Agent 多轮对话**。行为场景需要在独立会话中验收，不能将用例定义检查通过当成行为测试通过。
@@ -122,7 +134,11 @@ bash scripts/package-skill.sh dist 0.0.5
 ```bash
 python3 skill/scripts/validate_research.py - --report < research.json
 python3 skill/scripts/check_article.py - --strict --article-type source-analysis < article.md
-python3 skill/scripts/save_article.py --article-type source-analysis --output-dir /your/workspace/output < article.md
+# 改写并全文复查后生成待填写记录，模板自身不能通过门禁
+python3 skill/scripts/review_style.py --draft /tmp/draft.md --final /tmp/final.md > /tmp/review.json
+# 按风格审校契约实际完成全部检查，再填写 review.json
+python3 skill/scripts/check_article.py /tmp/final.md --strict --article-type source-analysis --draft /tmp/draft.md --review /tmp/review.json
+python3 skill/scripts/save_article.py --article-type source-analysis --output-dir /your/workspace/output --draft /tmp/draft.md --review /tmp/review.json < /tmp/final.md
 ```
 
 不要提交个人素材、运行产物、密钥或凭据；默认作者画像可按需调整，测试素材中的数字和产品表述不能当作发布事实。

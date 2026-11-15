@@ -15,7 +15,7 @@
         "Step 2 进入 publish_mode，执行 Layer 1-4 完整调研",
         "Step 3 提供 3-4 个选题方向，等待用户选择",
         "Step 4 先输出骨架等待确认，包含读者兑现映射表、证据账单和自设参数清单；标题层级按语义组织",
-        "Step 5 先检查 R1-R5 读者兑现，再执行事实、作者手迹、AI 味和细节审校",
+        "Step 5 保留初稿并独立按风格手册逐段改写，有多少问题处理多少；全文复查、六项口吻证据与手册复盘完成后才进入 Step 6",
         "Step 6 输出到 workspace/output/ 并报告路径"
       ],
       "expected_not": [
@@ -81,7 +81,7 @@
       "expected_behavior": [
         "check_article.py 退出码为 0",
         "无 [ERROR] 结构相关输出",
-        "输出包含 【文章质量检查通过】 或 【文章质量检查通过（含建议）】"
+        "输出包含 【机械检查通过】 或 【机械检查通过（含建议）】"
       ],
       "expected_not": [
         "不输出 # 标题唯一性错误",
@@ -166,6 +166,40 @@
       ],
       "expected_not": [
         "不跳过失败的校验、不将脚本通过当作对话行为通过"
+      ]
+    },
+    {
+      "id": "mandatory-style-rewrite",
+      "name": "风格改写和全文复查必做",
+      "description": "骨架确认后不得从初稿机械通过直接保存",
+      "input": {
+        "user_message": "骨架可以，按我的风格写完长文。",
+        "briefs_files": []
+      },
+      "expected_behavior": [
+        "Step 4 动笔前读取当前风格手册并保留初稿",
+        "Step 5 逐段处理全部口吻问题并全文复查，所有问题解决后核验审校记录",
+        "每次复盘手册，有用户确认依据则修订后按新规则复查"
+      ],
+      "expected_not": [
+        "不以至少改几处、脚本全绿或填通过替代实际改写",
+        "不把模型自评或骨架确认当作用户认可风格",
+        "不直接写文件绕过保存门禁"
+      ]
+    },
+    {
+      "id": "style-review-gate-regression",
+      "name": "风格门禁覆盖、过期与无数量配额回归",
+      "description": "执行真实 CLI 验证缺记录、未处理问题、覆盖不全和过期记录均不能交付",
+      "input": {
+        "article_file": "skill/scripts/test_review_style.py",
+        "check_command": "PYTHONDONTWRITEBYTECODE=1 python3 skill/scripts/test_review_style.py"
+      },
+      "expected_behavior": [
+        "风格门禁测试退出码为 0；机械通过但未审校仍阻断；超过五处问题必须全部处理"
+      ],
+      "expected_not": [
+        "不将脚本校验当成语义风格认证"
       ]
     }
   ]

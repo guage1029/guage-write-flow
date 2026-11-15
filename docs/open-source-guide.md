@@ -36,6 +36,7 @@
 ## 维护与验证
 
 - 修改写作能力时同步受影响的脚本、测试、README 和 `evals/evals.json`。
+- 新增或升级的保存调用必须传 `--draft` 和 `--review`；初稿分离、逐段改写、全文复查和手册迭代见 `skill/references/style-review.md`。已确认的风格规则集中在 `style-guide.md`，用户未授权时不自行持久化私人反馈。
 - 版本写在 `skill/SKILL.md` 的 `metadata.version` 中，README badge 与发布包版本保持一致。
 - `quick_validate.py` 检查分发包基本字段及必需文件，不等同于完整 YAML schema 或行为校验。
 - 写作脚本单测验证可执行逻辑；`scripts/test_distribution.py` 验证安装路径、兼容变量、隔离保存和 zip 结构。

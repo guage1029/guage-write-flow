@@ -27,6 +27,7 @@ FORBIDDEN_FRONTMATTER = {"version"}
 REQUIRED_REFERENCES = [
     "research-config.md",
     "style-guide.md",
+    "style-review.md",
     "checklist.md",
     "persona.md",
     "workspace-config.md",
@@ -42,6 +43,7 @@ REQUIRED_SCRIPTS = [
     "validate_research.py",
     "prepare_research.py",
     "save_article.py",
+    "review_style.py",
 ]
 
 

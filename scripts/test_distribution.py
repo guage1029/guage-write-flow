@@ -41,7 +41,16 @@ with TemporaryDirectory(prefix="guage-distribution-") as folder:
         return json.loads(result.stdout)["workspace"]
 
     assert inventory_workspace() == str(workspace)
-    run([sys.executable, str(installed / "scripts/save_article.py")], input=ARTICLE, env=env)
+    save_command = [sys.executable, str(installed / "scripts/save_article.py")]
+    missing_review = subprocess.run(save_command, input=ARTICLE, text=True, capture_output=True, env=env)
+    assert missing_review.returncode != 0 and not list((workspace / "output").glob("*.md"))
+    sys.path.insert(0, str(installed / "scripts"))
+    from test_review_style import reviewed_fixture
+    draft = temporary / "draft.md"
+    review = temporary / "review.json"
+    draft.write_text(ARTICLE, encoding="utf-8")
+    review.write_text(json.dumps(reviewed_fixture(ARTICLE, ARTICLE)), encoding="utf-8")
+    run(save_command + ["--draft", str(draft), "--review", str(review)], input=ARTICLE, env=env)
     saved = list((workspace / "output").glob("*.md"))
     assert len(saved) == 1 and saved[0].read_text() == ARTICLE
     assert not list(installed.rglob("*.pyc"))
@@ -59,8 +68,8 @@ with TemporaryDirectory(prefix="guage-distribution-") as folder:
     assert inventory_workspace() == str(preferred)
     assert (ROOT / "skill/references/workspace-config.md").read_bytes() == source_policy
 
-    run(["bash", str(ROOT / "scripts/package-skill.sh"), "package", "0.0.5"], cwd=temporary, env=env)
-    archive = temporary / "package/guage-write-flow-skill-0.0.5.zip"
+    run(["bash", str(ROOT / "scripts/package-skill.sh"), "package", "0.0.8"], cwd=temporary, env=env)
+    archive = temporary / "package/guage-write-flow-skill-0.0.8.zip"
     with ZipFile(archive) as bundle:
         names = bundle.namelist()
     assert names and all(name.startswith("guage-write-flow/") for name in names)

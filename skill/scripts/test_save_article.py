@@ -1,6 +1,7 @@
 """Run with python3 scripts/test_save_article.py; no external dependencies."""
 
 from datetime import datetime
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -8,6 +9,15 @@ from tempfile import TemporaryDirectory
 from zoneinfo import ZoneInfo
 
 from save_article import article_title, output_path, slugify
+from test_review_style import reviewed_fixture
+
+
+def review_args(directory, content):
+    draft = Path(directory) / "draft.txt"
+    review = Path(directory) / "review.json"
+    draft.write_text(content, encoding="utf-8")
+    review.write_text(json.dumps(reviewed_fixture(content, content)), encoding="utf-8")
+    return ["--draft", str(draft), "--review", str(review)]
 
 
 assert slugify("Codex 5：我跑了一遍!") == "codex-5-我跑了一遍"
@@ -29,8 +39,9 @@ with TemporaryDirectory() as directory:
 with TemporaryDirectory() as directory:
     script = Path(__file__).with_name("save_article.py")
     article = "# 收拾书桌的记录\n\n## 一、整理过程\n\n这篇文章记录了一次整理过程。\n\n下一步，我会把这个过程换一组材料再试一次。\n"
+    reviewed = review_args(directory, article)
     result = subprocess.run(
-        [sys.executable, str(script), "--output-dir", directory],
+        [sys.executable, str(script), "--output-dir", directory] + reviewed,
         input=article, capture_output=True, text=True,
     )
     assert result.returncode == 0, (result.stdout, result.stderr)
@@ -38,7 +49,7 @@ with TemporaryDirectory() as directory:
     assert len(saved) == 1 and saved[0].read_text(encoding="utf-8") == article
 
     duplicate = subprocess.run(
-        [sys.executable, str(script), "--output-dir", directory],
+        [sys.executable, str(script), "--output-dir", directory] + reviewed,
         input=article, capture_output=True, text=True,
     )
     assert duplicate.returncode == 0, (duplicate.stdout, duplicate.stderr)
@@ -46,14 +57,14 @@ with TemporaryDirectory() as directory:
     assert any(path.stem.endswith("-2") for path in Path(directory).glob("*.md"))
 
     blocked = subprocess.run(
-        [sys.executable, str(script), "--output-dir", directory],
+        [sys.executable, str(script), "--output-dir", directory] + reviewed,
         input="# Test article\n\n当然可以，本文将总结一下。\n", capture_output=True, text=True,
     )
     assert blocked.returncode != 0
     assert len(list(Path(directory).glob("*.md"))) == 2
 
     blocked = subprocess.run(
-        [sys.executable, str(script), "--output-dir", directory],
+        [sys.executable, str(script), "--output-dir", directory] + reviewed,
         input="# 书桌整理记录\n\n## 一、整理过程\n\n这标志着一次革命性变革。\n\n下一步，我会换一组材料再试。\n",
         capture_output=True, text=True,
     )
@@ -68,7 +79,7 @@ with TemporaryDirectory() as directory:
     )
 
     def save_analysis(article_type=None, content=analysis):
-        command = [sys.executable, str(script), "--output-dir", directory]
+        command = [sys.executable, str(script), "--output-dir", directory] + review_args(directory, content)
         if article_type is not None:
             command.extend(["--article-type", article_type])
         return subprocess.run(command, input=content, capture_output=True, text=True)
