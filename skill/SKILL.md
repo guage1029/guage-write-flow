@@ -2,7 +2,7 @@
 name: guage-write-flow
 description: "写作、改编或审校中文技术文章和公众号长文；不处理图卡分卡文案、配图策划或生成。"
 metadata:
-  version: "0.0.8"
+  version: "0.0.11"
 ---
 
 # guage-write-flow — 技术博客写作工作流
@@ -11,7 +11,7 @@ metadata:
 
 **定位边界：** 本 skill 负责文章调研、选题、创作、审校与 Markdown 交付。已有图片可作为素材或证据读取、核验和引用；不负责配图策划、图片生成或生成图片的回填。
 
-**完整交付的必经阶段：** 风格审校与语气改写必须与初稿分离，按当前风格手册逐段打磨并全文复查；有多少问题就处理多少，全部解决后才交付。每次执行都完成风格手册复盘，有已确认的新依据则迭代手册；机械检查全绿不能替代本步骤。执行契约见 `references/style-review.md`。
+**完整交付的必经阶段：** 风格审校与语气改写必须与初稿分离，按当前风格手册逐段打磨并全文复查；有多少问题就处理多少，全部解决后才交付。每次执行都完成风格手册复盘，有已确认的新依据且已获持久化授权时迭代手册；机械检查全绿不能替代本步骤。执行契约见 `references/style-review.md`。
 
 ## 快捷入口：审校模式
 
@@ -21,7 +21,7 @@ metadata:
 
 **跳过步骤：** Steps 1-4 全部跳过
 
-**直接加载：** `references/fact-policy.md` + `references/reader-payoff.md` + `references/persona.md` + `references/style-guide.md` + `references/checklist.md` + `references/ai-flavor-patterns.md` + `references/human-voice-policy.md` + `references/style-review.md`
+**直接加载：** `references/fact-policy.md` + `references/reader-payoff.md` + `references/persona.md` + `references/style.md` + `references/checklist.md` + `references/ai-flavor-patterns.md` + `references/human-voice-policy.md` + `references/style-review.md`
 
 **执行流程：** 直接进入 Step 5 审校（R1-R5 读者兑现门禁 → 内容 → 作者手迹保护 → AI 味检测/降噪 → 细节 → 二次扫描）
 
@@ -38,6 +38,8 @@ metadata:
 
 ## 长文主流程（6 步）
 
+默认面向中文技术文章和公众号长文；作者人设与风格使用可直接编辑的基础模板。不修改配置也可执行，不虚构作者身份或经历；非技术文体需另行调整调研与审校规则。用户定制和运行要求见发布包 README.md（源码位于仓库根目录）。
+
 ### Step 1：工作区解析 & 素材检查（Workspace & Brief Check）
 
 **触发条件：** 工作流启动时自动执行
@@ -48,10 +50,10 @@ metadata:
 
 1. 按 `references/workspace-config.md` 解析共享工作区路径；本次对话中用户明确指定路径时使用用户路径。
 
-2. 运行 `python3 {skill_root}/scripts/prepare_research.py inventory --workspace {workspace}`，读取候选文件路径与 SHA-256。`briefs/` 是候选材料池，非空不代表本次存在创作约束；系统隐藏项（如 `.DS_Store`）不计材料。
+2. 运行 `python3 "{skill_root}/scripts/prepare_research.py" inventory --workspace "{workspace}"`，读取候选文件路径与 SHA-256。`briefs/` 是候选材料池，非空不代表本次存在创作约束；系统隐藏项（如 `.DS_Store`）不计材料。
 3. 逐项读取候选内容，保留 inventory 的路径与哈希，并填写本次 `topic`、`relevance`（relevant/irrelevant/uncertain）、`read_status`（success/failed）、`reason` 与 `summary`。只有相关且读取成功的材料可作为本轮候选事实；无关材料列排除原因，不删除或移动。
 4. 用户明确选择输入文件时，在清单中填写非空 `selected_paths`，只盘点这些文件；不能自行以空数组绕过共享候选。用户明确要求完全不用本地素材时，允许 `selected_paths: []`，但必须同时记录非空 `selection_reason` 和真实用户指令的 `selection_source_ref`。指令引用是 Lead 如实登记的依据，脚本不能认证用户消息真伪。
-5. 将完整清单从 stdin 交给 `python3 {skill_root}/scripts/prepare_research.py route --workspace {workspace}`；原样保留输出为 `preflight`。脚本重算文件完整性、哈希和路由，不默认写文件。`can_proceed=false` 或非零退出时先处理具体解析/相关性缺口；可自行修复的内部问题继续推进，确需用户决定时才请求确认。
+5. 将完整清单从 stdin 交给 `python3 "{skill_root}/scripts/prepare_research.py" route --workspace "{workspace}"`；原样保留输出为 `preflight`。脚本重算文件完整性、哈希和路由，不默认写文件。`can_proceed=false` 或非零退出时先处理具体解析/相关性缺口；可自行修复的内部问题继续推进，确需用户决定时才请求确认。
 
 **多格式素材处理原则：**
 
@@ -94,7 +96,7 @@ metadata:
 
 **加载文件：** `references/research-config.md`
 
-**搜索与交付门禁：** 每项任务按 Tavily → Exa → 内置 Web Search 排序，已知 URL 可直接读取原文；执行记录、来源、可用事实、排除项和固定五部分轮次报告遵守该引用文件的数据契约。将 JSON 从 stdin 传入 `python3 {skill_root}/scripts/validate_research.py - --report`，退出码为 0 后才进入 Step 3；失败可交付问题报告，不得声称调研通过。不默认保存研究 JSON 或临时文件。
+**搜索与交付门禁：** 每项任务按 Tavily → Exa → 内置 Web Search 排序，已知 URL 可直接读取原文；执行记录、来源、可用事实、排除项和固定五部分轮次报告遵守该引用文件的数据契约。将 JSON 从 stdin 传入 `python3 "{skill_root}/scripts/validate_research.py" - --report`，退出码为 0 后才进入 Step 3；失败可交付问题报告，不得声称调研通过。不默认保存研究 JSON 或临时文件。
 
 **执行模式（以脚本生成的 preflight 为准）：**
 - 有相关且读取成功的本轮素材 → `brief_first_verify_mode`（三段式）
@@ -121,7 +123,7 @@ metadata:
 - 用户截图和公开资料表述不一致
 - 产品名称相近但主体不同
 - 功能演示成立，但官方定位描述不同
-- 时间相关信息（版本、定价、可用性）无法确认最新性
+- 本轮拟声称当前状态的版本、定价或可用性无法确认
 
 【差异确认】固定输出格式（措辞不可改写）：
 
@@ -140,7 +142,7 @@ metadata:
 **行为规范 B — `publish_mode`（无本轮相关素材时执行）**
 
 - 判断 topic_type，执行 research-config.md 中的 Layer 1-4 完整调研流程
-- 所有 claim 须有 Tier 1/2 来源支撑，30 天时效门禁严格执行
+- 所有 claim 须有 Tier 1/2 来源支撑，按事实类型执行时效门禁：易变事实在 30 天内复核，稳定知识与历史事件按适用范围核验
 **JSON 结构（两种模式均适用）：** 在本次写作上下文中保留完整 JSON 结构，候选事实单独列入 `tier_1_candidates` 字段。默认不写入文件；用户明确要求保存研究结果时，才按共享工作区规则写入。
 
 **阻断规则：**
@@ -153,7 +155,7 @@ metadata:
 
 **触发条件：** Step 2 调研通过后执行
 
-**加载文件：** `references/title-naming.md` + `references/reader-payoff.md`（基于 Step 2 调研结果，使用 `explore_mode`）
+**加载文件：** `references/persona.md` + `references/title-naming.md` + `references/reader-payoff.md`（基于 Step 2 调研结果，使用 `explore_mode`）
 
 **行为规范：**
 
@@ -177,7 +179,7 @@ metadata:
 
 若用户已提供标题，先将其作为工作标题评估，不得无理由替换。若标题涉及版本、价格、数字、发布时间、人物或机构，必须与 Step 2 的事实边界一致。
 
-**选题与账号定位对齐：** 实测选题的场景必须落在 `persona.md` 的「内容方向」和「目标读者」范围内。场景本身对目标读者无共鸣时，优先换角度（例如从「报销怎么批」改成「结构化决策原语怎么设计」），而不是硬写。
+**选题与作者定位对齐：** 实测选题的场景必须落在 `persona.md` 的「内容方向」和「目标读者」范围内。场景本身对目标读者无共鸣时，优先换角度（例如从「报销怎么批」改成「结构化决策原语怎么设计」），而不是硬写。
 
 **探索补查：** 如 Step 3 产生新的搜索结果，按 research-config.md 的工具顺序记录并运行 explore_mode 校验；拟写入正文的新事实必须重新纳入完整核验，不能把探索线索直接当作 supported。
 
@@ -189,7 +191,7 @@ metadata:
 
 **触发条件：** 用户确认选题后执行
 
-**加载文件：** `references/persona.md` + `references/style-guide.md` + `references/ai-flavor-patterns.md` + `references/checklist.md` + `references/style-review.md` + `references/fact-policy.md` + `references/title-naming.md` + `references/reader-payoff.md`
+**加载文件：** `references/persona.md` + `references/style.md` + `references/ai-flavor-patterns.md` + `references/checklist.md` + `references/style-review.md` + `references/fact-policy.md` + `references/title-naming.md` + `references/reader-payoff.md`
 
 **行为规范（两阶段，严格顺序）：**
 
@@ -199,7 +201,7 @@ metadata:
 - 对实测与经验文章，先搭“为什么做 → 我怎么试 → 案例逐步增加难度/代价 → 记录支持什么 → 哪些结论仍不能下 → 给读者什么判断”的叙事架构，再决定章节标题；不要先套目录模板
 - 骨架阶段使用工作标题；正文最强证据若暴露出更准确的核心承诺，先提出最终标题建议并等待用户确认，不能静默改名
 - 用户确认最终标题后，正式文章的 `#` 标题只能出现一次；副标题如有，必须补充范围、方法或证据，不得重复主标题
-- `#` 标题全文只出现一次。`##` / `###` / `####` 按语义选用，编号仅在用户要求或确实方便扫读时使用；使用 `####` 时，标题开头必须按同一父级下的顺序使用 `①`、`②`、`③`、`④`……；不要要求每个章节都拥有相同层级和数量的小标题。
+- `#` 标题全文只出现一次。`##` / `###` / `####` 按语义选用：长文主章节默认使用 `## 一、`、`## 二、`、`## 三、……`；`###` 在并列条目需要时使用 `1.`、`2.……`；使用 `####` 时，标题开头必须按同一父级下的顺序使用 `①`、`②`、`③`、`④`……（继续强制，且禁止从 `##` 直接跳级到 `####`）；不要要求每个章节都拥有相同层级和数量的小标题。
 - 开篇可从作者身份、真实触发点、问题、结果或图片切入；结尾可收束观点、给行动建议、预告下一篇或邀请读者互动，按文章目标决定，不固定叫“写在最后”。
 - 评测文章需要表格时，用它承载真正可比的数据；没有可比基线时，不强行生成 Before/After 表格。
 
@@ -224,7 +226,7 @@ metadata:
 
 **第二阶段：正文填充**
 - 用户确认骨架后才进入正文；正式动笔前重新读取当前风格手册、作者画像、AI 味规则和口吻清单，先吸收本轮已确认的风格反馈，不用前期重构阅读代替本篇校准
-- 正文遵守 style-guide.md、persona.md 和用户本轮要求；事实与证据边界优先
+- 正文遵守 style.md、persona.md 和用户本轮要求；事实与证据边界优先
 - 标题层级服务导航，不作为正文填充模板；避免把每个段落改造成编号小节
 - 结尾必须提供开篇没有的东西：下一步具体动作、读者可用的判断标准，或跑完才有资格说的发现（reader-payoff.md § R5）
 - 正文完成后保留真实初稿为系统临时目录中的 `draft.md`，冻结供改写对照；不得直接交付、保存成品或将终稿倒填为初稿。必须进入 Step 5 独立的逐段风格改写与全文复查
@@ -237,18 +239,18 @@ metadata:
 
 **触发条件：** Step 4 正文完成后执行（或通过审校快捷入口直接触发）
 
-**加载文件：** `references/fact-policy.md` + `references/reader-payoff.md` + `references/persona.md` + `references/style-guide.md` + `references/checklist.md` + `references/ai-flavor-patterns.md` + `references/human-voice-policy.md` + `references/style-review.md`
+**加载文件：** `references/fact-policy.md` + `references/reader-payoff.md` + `references/persona.md` + `references/style.md` + `references/checklist.md` + `references/ai-flavor-patterns.md` + `references/human-voice-policy.md` + `references/style-review.md`
 
 **行为规范（顺序执行）：**
 
 1. **前置：读者兑现门禁 R1-R5** — 按 `reader-payoff.md` 逐项判定 R1 冷启动、R2 标题兑现、R3 证据使用、R4 自设参数披露、R5 结尾新信息。**这 5 项先于常规内容审校**，完整写作模式中，R1–R4 不通过则回到 Step 4 补骨架或补证据，不得在正文里打补丁绕过；R5 记录为改进建议。每项判定须写入审校报告并给出正文位置
 2. **第一遍：内容审校** — 技术准确性、数据一致性、逻辑结构；**检查正文中是否有缺少来源的高风险事实**（版本号、性能数据、价格、模型名、发布时间等），发现则列入审校报告"待核验事实"栏，不替用户补全
-3. **第二遍：瓜哥口吻校准** — 新文章依据 `persona.md` + `style-guide.md` 校准；已有文章按 `human-voice-policy.md` 保护原作者声音，不强行改成瓜哥口吻。按 `references/style-review.md` 独立执行逐段语气改写：通读初稿，将所有不符合当前风格手册的句段逐项登记并处理，有多少改多少，不设数量或轮数配额。六项口吻检查逐项引用终稿并解释依据；原本合格的句段也要实际审查，可保留但不能免审。全部问题处理并全文复查通过前，不得交付或保存完整长文。口语目标是尽可能接近瓜哥自然讲述，不得用堆口头禅代替校准；真实经历不足时使用直接解释视角，不补造作者体验
+3. **第二遍：当前作者口吻校准** — 新文章依据 `persona.md` + `style.md` 校准；已有文章按 `human-voice-policy.md` 保护原作者声音，不强行改成当前作者口吻。按 `references/style-review.md` 独立执行逐段语气改写：通读初稿，将所有不符合当前风格手册的句段逐项登记并处理，有多少改多少，不设数量或轮数配额。六项口吻检查逐项引用终稿并解释依据；原本合格的句段也要实际审查，可保留但不能免审。全部问题处理并全文复查通过前，不得交付或保存完整长文。表达目标以当前 style.md 为准，正式或轻松语气均可；不得用堆口头禅代替校准；真实经历不足时使用直接解释视角，不补造作者体验
 4. **第三遍：作者手迹保护** — 按 human-voice-policy.md 判断哪些句子不该动；已有文章优先保留作者的语气词、重复、停顿、抽象层级和不工整呼吸
 5. **第四遍：AI 味检测/降噪** — 按 ai-flavor-patterns.md 标记 P0/P1/P2 问题；默认修复 P0/P1，P2 只在密度过高时处理
 6. **第五遍：细节打磨** — 句长、段落、标点、朗读顺畅度
 7. **改写后全文复查 + 改动二次扫描** — 按当前风格手册从开篇到结尾重新检查全文，发现残留问题继续改写并复查，直到全部解决；不能以改过若干句或机械检查通过结束本阶段。对改动过的句子另检查是否新增假深刻、意义拔高、金句、排比、虚构细节、未经核验事实；发现则回退或改成更白描的表达。**R4 免责句被删或后移、R3 限制性数字（样本量/口径/费用/延迟）被删，均视为新增缺陷，一并回退**
-8. **最终格式与禁用语检查** — 对完整 Markdown 从 stdin 运行 `check_article.py - --strict --article-type {已确定类型} --draft {temp}/draft.md --review {temp}/review.json`；`review.json` 按 `references/style-review.md` 生成待填模板并如实填写。局部审校不加 `--strict`，但修订全文交付仍核验审校记录。`source-analysis` 只改变 R3 证据配置，不豁免事实、口吻或其他 strict 门禁。未指定或未知类型维持原保守行为；不得为避开实测证据要求改文章类型。非零退出先处理具体问题，不交付未通过的完整稿。
+8. **最终格式与禁用语检查** — 对完整 Markdown 从 stdin 运行 `check_article.py - --strict --article-type {已确定类型} --draft "{temp}/draft.md" --review "{temp}/review.json"`；`review.json` 按 `references/style-review.md` 生成待填模板并如实填写。局部审校不加 `--strict`，但修订全文交付仍核验审校记录。`source-analysis` 只改变 R3 证据配置，不豁免事实、口吻或其他 strict 门禁。未指定或未知类型维持原保守行为；不得为避开实测证据要求改文章类型。非零退出先处理具体问题，不交付未通过的完整稿。
 
 **detect-only 模式：**
 - 触发词：只检查 / 先别改 / detect / audit only / 标出来 / 不要重写
@@ -271,34 +273,34 @@ metadata:
 **输出结构：**
 - 审校报告：在对话窗口完整展示（含每遍发现的问题）
 - **读者兑现门禁判定表**：R1-R5 每项给出「通过 / 不通过 / 部分」+ 正文位置或缺失证据，作为报告第一节
-- **瓜哥口吻与风格改写证据**：六项口吻判定均有终稿引文和理由；列出全部已发现问题的原文、改写或删除、原因、是否可还原，不用“至少 3–5 处”或只列机械检查修补来替代全文打磨
-- **风格手册复盘**：每次执行都复盘；明确本轮用户反馈依据、更新位置及适用范围，或说明无新依据而保持现有规则。按 style-guide.md 持续维护，不将 Agent 自评当成用户偏好
+- **当前作者口吻与风格改写证据**：六项口吻判定均有终稿引文和理由；列出全部已发现问题的原文、改写或删除、原因、是否可还原，不用“至少 3–5 处”或只列机械检查修补来替代全文打磨
+- **风格手册复盘**：每次执行都复盘；明确本轮用户反馈依据、更新位置及适用范围，或说明无新依据而保持现有规则。按 style.md 的授权边界维护；局部反馈默认只在本轮生效，不将 Agent 自评当成用户偏好
 - 审校快捷入口：修订后全文在对话窗口输出；detect-only 仍只输出检测报告
 - 完整长文流程：最终稿通过门禁后保存为 Markdown，在对话回复中给出文件绝对路径；用户要求只在对话中交付时，直接输出全文而不保存
 - **审校报告禁止写入最终 .md 稿件文件**
 
 **阻断规则（完整写作 / 发布就绪稿；局部审校遵循快捷入口范围）：** R1（冷启动）、R2（标题无空项）、R3（按明确文章类型提供证据）、R4（自设参数就近披露）任一不通过，不得交付完整终稿；必须回到 Step 4 补骨架、补证据或改标题。R5 与其余 WARN 记录在报告中。
 
-**新增门禁：** 新写长文的固定 Markdown 格式、瓜哥口吻清单和 AI 风格审校必须通过后才能进入 Step 6。已有文章的局部审校不强行套用瓜哥声线；只有用户明确要求改成瓜哥口吻时才启用新写文章标准。
+**新增门禁：** 新写长文的固定 Markdown 格式、当前作者口吻清单和 AI 风格审校必须通过后才能进入 Step 6。已有文章的局部审校不强行套用当前作者声线；只有用户明确要求改成当前作者口吻时才启用新写文章标准。
 
 ### Step 6：长文输出
 
-- **完整长文默认保存**：将最终 Markdown 从 stdin 交给 `scripts/save_article.py --article-type {已确定类型} --draft {temp}/draft.md --review {temp}/review.json`；官方资料解析用 `--article-type source-analysis`。检查与保存必须传同一类型；不得由 agent 自行拼接目录、日期或 slug。
-- 脚本默认写入共享工作区的 `output/`，文件名为 `{Asia/Shanghai YYYYMMDD}-{title-slug}.md`；用户指定其他路径时传入 `--output` 或 `--output-dir`。
+- **完整长文默认保存**：将最终 Markdown 从 stdin 交给 `scripts/save_article.py --workspace "{workspace}" --article-type {已确定类型} --draft "{temp}/draft.md" --review "{temp}/review.json"`；官方资料解析用 `--article-type source-analysis`。检查与保存必须传同一类型；不得由 agent 自行拼接目录、日期或 slug。
+- 脚本通过同一 --workspace 写入本轮工作区的 `output/`，文件名为 `{Asia/Shanghai YYYYMMDD}-{title-slug}.md`；用户指定其他路径时传入 `--output` 或 `--output-dir`。
 - 保存脚本要求真实初稿与风格审校记录，将其和 `--article-type` 传入 checker 子进程并运行 strict。逐块覆盖、六项口吻证据、全部问题处理、手册复盘及稿件/规则哈希一致性都通过后才写最终文件；记录缺失、待审、漏项或过期均阻断。不得直接写文件绕过门禁。
 - `check_article.py` 硬检查唯一 H1、H2 起始章节、层级连续、禁止 H5+、H4 编号，以及已编码的 AI 套话和结构信号；这些检查未通过时不能保存。
-- 只在对话中交付完整 Markdown（包括审校后的全文）时，也将全文从 stdin 交给 `check_article.py - --draft {temp}/draft.md --review {temp}/review.json` 并传入同一 `--article-type`；完整新稿加 `--strict`，范围受限的已有文章审校用默认模式。非零退出时处理后重跑，通过才交付。
+- 只在对话中交付完整 Markdown（包括审校后的全文）时，也将全文从 stdin 交给 `check_article.py - --draft "{temp}/draft.md" --review "{temp}/review.json"` 并传入同一 `--article-type`；完整新稿加 `--strict`，范围受限的已有文章审校用默认模式。非零退出时处理后重跑，通过才交付。
 - 文件名冲突时脚本自动追加 `-2`、`-3` 等序号，禁止覆盖。
 - 保存成功后在对话回复中给出**绝对路径**。用户要求只在对话中交付时不写文件，并输出完整 Markdown。
 - 审校结果默认只在对话中交付；只有用户明确要求保存时才写文件。研究 JSON 不默认留存；初稿、改写稿和审校 JSON 使用本轮系统临时目录，除用户要求保留外完成后清理。
 
-**瓜哥口吻的执行边界：** `check_article.py` 可硬拦格式错误和已编码的 AI 风格信号，但不能单独证明文章接近瓜哥口语。新写长文还必须通过 Step 5 的人工口吻门禁；机械检查和审校记录校验不能证明语义质量或实际阅读；风格必须按手册逐段改写、全文复查，不能用记录形式过关。
+**当前作者口吻的执行边界：** `check_article.py` 可硬拦格式错误和已编码的 AI 风格信号，但不能单独证明文章符合当前作者的风格配置。新写长文还必须通过 Step 5 的语义风格门禁；机械检查和审校记录校验不能证明语义质量或实际阅读；风格必须按手册逐段改写、全文复查，不能用记录形式过关。
 
 ---
 
 ## 工作区规则
 
-详细工作区解析规则、目录说明与安全约束见 `references/workspace-config.md`。运行产物不写入安装目录；已获用户持续风格维护授权时例外，只更新风格手册及必要的 Skill 补丁版本；未授权时先报告拟维护规则，不自行持久化。每次执行复盘，不无依据地改手册；不自动对外推送。
+详细工作区解析规则、目录说明与安全约束见 `references/workspace-config.md`。运行产物不写入安装目录；用户明确要求写回人设/风格或已授权持续维护时例外，只更新相应配置及必要的 Skill 补丁版本；本轮局部反馈默认只用于本轮，未授权时先报告拟维护规则，不自行持久化。每次执行复盘，只按明确授权与用户依据持久化，不无依据地改手册；不自动对外推送。
 
 ## 参考文件索引
 
@@ -308,8 +310,8 @@ metadata:
 | `references/fact-policy.md` | 输出门禁：claim 边界、禁止表述、自设参数披露、证据使用义务 | Step 3-5 |
 | `references/checklist.md` | 审校逐遍执行清单 | Step 4 / Step 5 |
 | `references/style-review.md` | 必做的初稿分离、逐段语气改写、全文复查及手册复盘与记录契约 | Step 4 / Step 5 / Step 6 |
-| `references/persona.md` | 账号人设、内容方向、目标读者 | Step 3-5 |
-| `references/style-guide.md` | 持续迭代的风格手册、瓜哥声音、逐段改写与已确认反馈 | Step 4 / Step 5 |
+| `references/persona.md` | 作者人设、内容方向、目标读者 | Step 3-5 |
+| `references/style.md` | 持续迭代的风格手册、当前作者声音、逐段改写与已确认反馈 | Step 4 / Step 5 |
 | `references/ai-flavor-patterns.md` | AI 味模式库与修复动作 | Step 4 / Step 5 |
 | `references/human-voice-policy.md` | 作者手迹保护规则 | Step 5 |
 | `references/title-naming.md` | 标题命名机制 | Step 3 |

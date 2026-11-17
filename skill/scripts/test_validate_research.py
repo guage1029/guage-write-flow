@@ -23,9 +23,9 @@ def fixture():
         "topic": "合成调研测试", "topic_type": "product", "mode": "publish_mode", "research_date": day,
         "preflight": route({"topic": "合成调研测试", "materials": []}, TEST_WORKSPACE.name),
         "search_attempts": [{"task_id": "r1", "provider": "tavily", "query": "fixture", "outcome": "success", "result_urls": [URL]}],
-        "sources": [{"url": URL, "title": "合成来源", "tier": 1, "source_date": day,
+        "sources": [{"url": URL, "title": "合成来源", "tier": 1, "source_date": day, "verified_at": day,
                      "task_id": "r1", "discovered_by": "tavily", "fetched_by": "web_fetch", "fetch_status": "success", "content_kind": "full_text"}],
-        "claims": [{"claim_id": "c1", "claim_text": "仅用于测试的事实", "status": "supported", "tier": 1,
+        "claims": [{"claim_id": "c1", "claim_text": "仅用于测试的事实", "fact_type": "dynamic", "status": "supported", "tier": 1,
                     "source_url": URL, "source_date": day, "evidence_quote": "fixture excerpt"}],
         "tier_1_candidates": [], "discrepancies": [], "excluded_claims": [],
         "quality_check": {"passed": True},
@@ -70,7 +70,7 @@ class ResearchTests(unittest.TestCase):
             ("sources", "content_kind", "snippet"), ("sources", "fetch_status", "failed"),
             ("sources", "discovered_by", "exa"), ("sources", "source_date", ""),
             ("sources", "source_date", (TODAY + timedelta(days=1)).isoformat()),
-            ("sources", "source_date", (TODAY - timedelta(days=31)).isoformat()),
+            ("sources", "verified_at", (TODAY - timedelta(days=31)).isoformat()),
             ("sources", "tier", "2b"), ("claims", "source_url", "https://missing.example"),
             ("claims", "source_date", "2000-01-01"), ("claims", "status", "unverified"),
             ("claims", "status", "invented"), ("claims", "evidence_quote", ""),
@@ -79,6 +79,68 @@ class ResearchTests(unittest.TestCase):
             with self.subTest(key=key, field=field, value=value):
                 data = fixture(); data[key][0][field] = value
                 self.assertTrue(validate_data(data, TODAY))
+
+    def test_web_only_and_all_tools_unavailable(self):
+        data = fixture()
+        success = data["search_attempts"][0]
+        data["search_attempts"] = [
+            {**success, "provider": provider, "outcome": "unavailable", "reason": "合成：无权限或网络不可达", "result_urls": []}
+            for provider in ("tavily", "exa")
+        ] + [{**success, "provider": "web"}]
+        data["sources"][0]["discovered_by"] = "web"
+        self.assertEqual(validate_data(data, TODAY), [])
+        del data["search_attempts"][1]
+        self.assertTrue(validate_data(data, TODAY))
+        data = fixture()
+        data["search_attempts"] = [
+            {**success, "provider": provider, "outcome": "unavailable", "reason": "合成：工具不可用", "result_urls": []}
+            for provider in ("tavily", "exa", "web")
+        ]
+        data.update(sources=[], claims=[])
+        self.assertTrue(any("claims" in e for e in validate_data(data, TODAY)))
+
+    def test_stable_and_event_dates(self):
+        data = fixture()
+        source, claim = data["sources"][0], data["claims"][0]
+        source["source_date"] = claim["source_date"] = "1990-01-01"
+        self.assertEqual(validate_data(data, TODAY), [])  # Old publication can still support a freshly checked claim.
+        source["verified_at"] = (TODAY - timedelta(days=31)).isoformat()
+        self.assertTrue(validate_data(data, TODAY))
+        claim["fact_type"] = "stable"
+        self.assertEqual(validate_data(data, TODAY), [])
+        claim.update(fact_type="event", event_date="1990-01-01")
+        self.assertEqual(validate_data(data, TODAY), [])
+        for value in (None, "", (TODAY + timedelta(days=1)).isoformat()):
+            claim["event_date"] = value
+            self.assertTrue(validate_data(data, TODAY))
+        claim["fact_type"] = "unknown"
+        self.assertTrue(validate_data(data, TODAY))
+
+    def test_undated_documents_need_real_verification(self):
+        data = fixture()
+        data["sources"][0]["source_date"] = data["claims"][0]["source_date"] = None
+        self.assertEqual(validate_data(data, TODAY), [])
+        for value in (None, "", "invalid", (TODAY + timedelta(days=1)).isoformat()):
+            changed = copy.deepcopy(data)
+            changed["sources"][0]["verified_at"] = value
+            self.assertTrue(validate_data(changed, TODAY))
+        data["research_date"] = (TODAY - timedelta(days=1)).isoformat()
+        self.assertTrue(validate_data(data, TODAY))
+
+    def test_dynamic_verification_window_boundary(self):
+        data = fixture()
+        data["sources"][0]["verified_at"] = (TODAY - timedelta(days=30)).isoformat()
+        self.assertEqual(validate_data(data, TODAY), [])
+        data["sources"][0]["verified_at"] = (TODAY - timedelta(days=31)).isoformat()
+        self.assertTrue(validate_data(data, TODAY))
+        data = fixture()
+        del data["sources"][0]["verified_at"]
+        data["claims"][0]["fact_type"] = "stable"
+        self.assertTrue(validate_data(data, TODAY))
+        data = fixture()
+        del data["claims"][0]["fact_type"]
+        data["sources"][0]["verified_at"] = (TODAY - timedelta(days=31)).isoformat()
+        self.assertTrue(validate_data(data, TODAY))
 
     def test_empty_conflict_and_report(self):
         data = fixture(); data["claims"] = []

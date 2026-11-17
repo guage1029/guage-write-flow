@@ -10,10 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from prepare_research import workspace_path
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
-# The installer binds this default to the selected workspace in the installed copy.
-DEFAULT_OUTPUT_DIR = Path.home() / "Documents" / "workspace" / "guage-write-flow" / "output"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 H1 = re.compile(r"^#[ \t]+(.+?)\s*#*\s*$", re.M)
 
@@ -44,16 +43,17 @@ def available_path(path):
         n += 1
 
 
-def output_path(title, output_dir=DEFAULT_OUTPUT_DIR, now=None):
+def output_path(title, output_dir=None, now=None):
     date = (now or datetime.now(SHANGHAI)).strftime("%Y%m%d")
     slug = slugify(title)
     if not slug:
         raise ValueError("标题中没有可用于文件名的文字或数字")
-    return available_path(Path(output_dir) / f"{date}-{slug}.md")
+    directory = Path(output_dir) if output_dir is not None else Path.cwd() / "output"
+    return available_path(directory / f"{date}-{slug}.md")
 
 
-def requested_path(value, title):
-    path = Path(value).expanduser()
+def requested_path(value, title, workspace=None):
+    path = workspace_path(workspace) / Path(value).expanduser()
     if path.exists() and path.is_dir():
         return output_path(title, path)
     if not path.suffix:
@@ -95,6 +95,7 @@ def save(content, destination):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--workspace", help="本轮已解析的工作区；省略时使用进程当前工作目录")
     parser.add_argument("--output", help="explicit destination file; takes precedence over the default path")
     parser.add_argument("--output-dir", help="explicit destination directory; keeps the default date-title filename")
     parser.add_argument("--article-type", help="pass the explicit article type to the strict checker")
@@ -107,10 +108,12 @@ def main():
     content = sys.stdin.read()
     try:
         title = article_title(content)
+        workspace = workspace_path(args.workspace)
         if args.output:
-            destination = requested_path(args.output, title)
+            destination = requested_path(args.output, title, workspace)
         else:
-            destination = output_path(title, Path(args.output_dir).expanduser() if args.output_dir else DEFAULT_OUTPUT_DIR)
+            directory = workspace / Path(args.output_dir).expanduser() if args.output_dir else workspace / "output"
+            destination = output_path(title, directory)
     except ValueError as exc:
         parser.error(str(exc))
 

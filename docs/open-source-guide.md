@@ -1,43 +1,27 @@
-# 开源分发说明
+# 开源分发维护
 
-项目名称、Skill 名称、安装目录和 zip 根目录统一为 `guage-write-flow`。仓库只分发 `skill/` 内的写作能力，不包含图卡文案或配图生产流程。
+使用、安装、搜索降级、作者定制、工作区及升级说明统一维护在仓库 README.md。Skill 的运行源码在 skill/；安装与 zip 额外附带 README.md 和原 MIT LICENSE，不打包仓库 evals、docs 或个人工作区。
 
-安装命令、升级方式与职责边界见 [README](../README.md)。
+## 修改范围
 
-## 安装目标
+修改写作能力时检查主流程、引用规范、脚本、测试、README 和 evals 的使用方。版本只递增补丁号，入口 metadata.version、README badge 和发布包版本保持一致。
 
-| 参数 | 默认 Skills 目录 | 环境变量覆盖 |
-|---|---|---|
-| `--tool hermes` | `~/.hermes/skills` | `HERMES_SKILLS_DIR` |
-| `--tool claude-code` | `~/.claude/skills` | `CLAUDE_SKILLS_DIR` |
-| `--tool codex` | `~/.codex/skills` | `CODEX_HOME` |
-| `--tool custom` | `--skills-dir` 指定的目录 | — |
-| `--tool auto` | 检测后选择已安装工具 | — |
-| `--tool skip` | 不安装，只初始化 workspace | — |
+基础默认配置位于 skill/references/persona.md 和 skill/references/style.md。不把本地作者的私人样文、身份信息或反馈加入公共模板；个人版本与升级备份放到仓库和安装目录之外。默认本轮反馈只用于本轮；有明确写回要求或持续维护授权后，才修改长期配置。
 
-安装脚本只同步分发包。已有同名安装会先询问是否覆盖；覆盖时删除已从分发包移除的文件，因此应先备份个人定制。旧名称 `ai-write-flow` 的安装副本不会自动删除，也不会移动已有工作区。
+运行工作区在任务启动时解析并固定，优先用户指定路径，其次任务工作目录。安装不绑定工作区，--workspace 仅用于可选目录初始化。预检和保存传同一 --workspace；用户单独指定输出位置不改变素材池。不得恢复机器绝对路径或旧的安装环境变量绑定。
 
-## 工作区配置
+易变事实使用 verified_at 的 30 天复核窗口，稳定知识及历史事件按适用范围判断；source_date 是原文日期，未知为 null，不用访问时间冒充。日期、分类和调用记录均不能替代真实原文读取与语义审查。
 
-安装时按 `--workspace`、`GUAGE_WRITE_FLOW_WORKSPACE`、旧变量 `AI_WRITE_FLOW_WORKSPACE`、交互输入的顺序选择目录，转换为绝对路径。
+## 安装与升级
 
-该路径同时写入安装副本的 `references/workspace-config.md`、`scripts/prepare_research.py` 和 `scripts/save_article.py`。不再生成或读取旧的 `workspace-local.md`。安装后的默认路径不依赖某个 Agent 进程临时设置的环境变量；改变目录时重新安装并传入新路径。
+安装入口支持 hermes、claude-code、codex、custom、auto，保留 skip 仅初始化目录。宿主安装路径沿用原有 HERMES_SKILLS_DIR、CLAUDE_SKILLS_DIR、CODEX_HOME；这些不决定稿件路径。覆盖前提醒先在目标目录之外备份人设与风格，用户对比新旧后自行合并，不自动迁移配置。旧 ai-write-flow 安装不自动删除。
 
-运行时用户明确指定的工作区优先。预检传入 `--workspace`；保存到另一工作区时传入 `--output-dir <workspace>/output`。没有执行安装时，源码默认使用 `~/Documents/workspace/guage-write-flow`。
+安装覆盖使用 rsync 同步分发目录，并删除上游已移除的文件。请勿在安装目录保留唯一备份或业务产物。独立的源代码包和已安装 Skill 都应能从任意稿件目录运行，不要求在安装目录执行。
 
-工作区包含：
+## 验证与发布
 
-- `briefs/`：候选材料；按主题判断相关性，不因目录非空直接进入素材核验模式。
-- `research/`：仅在用户明确要求保存研究结果时写入。
-- `output/`：通过检查后的完整文章；审校报告不混入正文。
+运行 README 中的基础校验、写作脚本单测、隔离分发测试和 eval 脚本。分发测试验证安装后不绑定路径、中文/空格路径、配置加载、保存门禁、覆盖提示和 zip 内容；运行时不得访问真实稿件或推送远端。
 
-安装和打包均不收集工作区内容。不要把个人素材、真实业务数据或凭据加入仓库。
+脚本场景与行为场景分开报告。eval runner 只运行脚本和检查用例定义；模型是否真实降级、完整逐段阅读及满足作者风格，需要独立会话验收，不能仅凭 JSON 或哈希宣称已证明。
 
-## 维护与验证
-
-- 修改写作能力时同步受影响的脚本、测试、README 和 `evals/evals.json`。
-- 新增或升级的保存调用必须传 `--draft` 和 `--review`；初稿分离、逐段改写、全文复查和手册迭代见 `skill/references/style-review.md`。已确认的风格规则集中在 `style-guide.md`，用户未授权时不自行持久化私人反馈。
-- 版本写在 `skill/SKILL.md` 的 `metadata.version` 中，README badge 与发布包版本保持一致。
-- `quick_validate.py` 检查分发包基本字段及必需文件，不等同于完整 YAML schema 或行为校验。
-- 写作脚本单测验证可执行逻辑；`scripts/test_distribution.py` 验证安装路径、兼容变量、隔离保存和 zip 结构。
-- `evals/run_evals.py` 执行脚本场景并检查行为用例定义；工作流用例仍需真实 Agent 会话执行。
+发布前核对 zip 根目录、版本、README 和许可证，排除缓存、私人内容与运行产物。许可证与版权声明沿用原仓库，不自行替换。实际发布或推送需用户明确指令。

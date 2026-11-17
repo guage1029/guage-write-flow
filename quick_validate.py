@@ -26,7 +26,7 @@ FORBIDDEN_FRONTMATTER = {"version"}
 
 REQUIRED_REFERENCES = [
     "research-config.md",
-    "style-guide.md",
+    "style.md",
     "style-review.md",
     "checklist.md",
     "persona.md",

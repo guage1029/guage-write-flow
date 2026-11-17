@@ -88,7 +88,7 @@
 
 **官方资料深度解析（`source-analysis`）：** 选题和骨架明确仅分析已核验资料、没有作者实测或接入承诺时，R3 要求正文同时有真实来源数据表（含数据行、口径）和 HTTP(S) 来源链接，不要求作者代码或截图。表格与链接的真实性由事实核验和独立审校负责，脚本仅检查存在性；不要把资料分析写成亲测。
 
-交付检查显式传 `check_article.py - --strict --article-type source-analysis --draft {temp}/draft.md --review {temp}/review.json`，保存时传 `save_article.py --article-type source-analysis --draft {temp}/draft.md --review {temp}/review.json`，由保存脚本透传类型与审校记录。风格记录按 style-review.md 执行，资料解析不能豁免语气改写。`hands-on` / `evaluation` / `integration` 仍强制至少两类真实产物；未指定或未知类型保留原触发词保守检查。不以改类型绕过证据要求，其他 strict 门禁始终执行。
+交付检查显式传 `check_article.py - --strict --article-type source-analysis --draft "{temp}/draft.md" --review "{temp}/review.json"`，保存时传 `save_article.py --workspace "{workspace}" --article-type source-analysis --draft "{temp}/draft.md" --review "{temp}/review.json"`，由保存脚本透传类型与审校记录。风格记录按 style-review.md 执行，资料解析不能豁免语气改写。`hands-on` / `evaluation` / `integration` 仍强制至少两类真实产物；未指定或未知类型保留原触发词保守检查。不以改类型绕过证据要求，其他 strict 门禁始终执行。
 
 ---
 

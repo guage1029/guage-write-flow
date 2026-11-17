@@ -1,6 +1,6 @@
 # 风格审校与语气改写：完整交付的必经阶段
 
-风格手册是 `style-guide.md`；作者身份与读者背景见 `persona.md`，问题信号见 `ai-flavor-patterns.md`。这一步必须实际完成，不能以机械检查通过、填表或改过几句话替代。
+风格手册是 `style.md`；作者身份与读者背景见 `persona.md`，问题信号见 `ai-flavor-patterns.md`。这一步必须实际完成，不能以机械检查通过、填表或改过几句话替代。
 
 ## 初稿、改写、全文复查必须分离
 
@@ -9,9 +9,9 @@
 3. **按手册逐段改写。** 检查开篇、正文、转场、列表说明和结尾。所有不符合本篇风格目标的句段都要处理，有多少改多少，问题清单不截断，不设最低或最高改写数量。处理报告腔、助手腔、机械总起、翻译腔、空洞判断、重复解释和不自然节奏；不要只修脚本报错处。必要时重组段落或重写整节；代码、数据、来源、限制条件和图片证据保持真实。
 4. **全文复查。** 按手册从头重读改写稿，不能只检查改动句。发现残留问题继续改写并再复查，直到全部需处理问题解决、六项口吻检查均通过。不能以“已改 N 处”“已迭代 N 轮”作为完成条件。改动过的句子还要检查是否新增虚构经历、金句、意义拔高或丢失事实边界。无法解决的问题明确列为阻塞，不交付冒充完成的稿件。
 5. **形成可核对记录。** 六项口吻检查逐项引用终稿并解释依据；登记全部发现的问题及实际改写或删除；逐块记录最终判断。原本合格的句段可保留，但必须实际审查并写明理由，不能为凑数量而改写。没有发现问题也不能跳过这一步。
-6. **复盘手册并交付。** 按 `style-guide.md` 的持续迭代规则完成本次复盘。如手册有改动，用最新规则复查本篇；再绑定规则与终稿生成记录。只有记录校验和机械检查都通过才可交付。无需为此新增用户确认回合。
+6. **复盘手册并交付。** 按 `style.md` 的持续迭代规则完成本次复盘。如手册有改动，用最新规则复查本篇；再绑定规则与终稿生成记录。只有记录校验和机械检查都通过才可交付。无需为此新增用户确认回合。
 
-新写长文默认以瓜哥风格为目标。已有文章也必须按用户范围做风格审查和应有改写，但优先保护原作者声音；用户明确要求瓜哥口吻时才转换。detect-only 只报告全部问题，不改写、不交付修订稿、不保存。
+新写长文以当前 persona.md 与 style.md 为目标，不预设私人身份或口吻。已有文章也必须按用户范围做风格审查和应有改写，但优先保护原作者声音；用户明确要求当前作者口吻时才转换。detect-only 只报告全部问题，不改写、不交付修订稿、不保存。
 
 ## 临时记录与执行命令
 
@@ -20,7 +20,7 @@
 在完成实际改写和全文复查后，用当前稿件生成待填写模板：
 
 ```bash
-python3 {skill_root}/scripts/review_style.py --draft {temp}/draft.md --final {temp}/final.md > {temp}/review.json
+python3 "{skill_root}/scripts/review_style.py" --draft "{temp}/draft.md" --final "{temp}/final.md" > "{temp}/review.json"
 ```
 
 模板只计算初稿、终稿、当前规则和全部 Markdown 块的哈希，所有检查默认 `pending`。必须完成实际审校后逐项填写，禁止脚本批量置为 `pass`、复制同一句理由冒充逐段检查，或倒填报告掩盖未执行的改写。
@@ -32,20 +32,20 @@ python3 {skill_root}/scripts/review_style.py --draft {temp}/draft.md --final {te
 | `draft_sha256` / `final_sha256` | 模板生成；保留真实初稿，终稿修改后重新绑定并复查 |
 | `rules_sha256` | 模板生成；绑定本次实际使用的当前规则，规则改变后重新复查 |
 | `blocks[]` | 保留每个块的 index/hash；实际逐块复查后填写 `status: pass` 和具体 `reason`。空行分隔的标题、段落、列表、表格和代码片段均覆盖；技术产物只核对必要性、位置和真实性边界，不为口语化改坏代码或数据 |
-| `voice_checks[]` | `judgment` 判断有据、`presence` 作者在场但不虚构、`explanation` 从读者问题推进、`rhythm` 自然口语与转场、`restraint` 无助手腔与空洞拔高、`structure` 结构适合本篇；每项填 `status: pass`、终稿原句 `evidence`、具体 `reason` |
+| `voice_checks[]` | `judgment` 判断有据、`presence` 作者在场但不虚构、`explanation` 从读者问题推进、`rhythm` 符合当前配置的语气、节奏与转场、`restraint` 无助手腔与空洞拔高、`structure` 结构适合本篇；每项填 `status: pass`、终稿原句 `evidence`、具体 `reason` |
 | `findings[]` | 全部问题，无数量配额；每项有初稿 `before`、`action: rewrite/delete`、原因 `reason` 和 `status: resolved`；rewrite 还需实际出现在终稿中的 `after`。不要遗漏末尾问题。无问题时为空数组并在各块理由中说明保留依据 |
 | `handbook_iteration` | `decision: updated/unchanged`；`basis` 写本轮用户反馈来源、修订位置与理由，或解释无新风格依据而保持规则。模型自己的好评、脚本全绿和用户仅确认骨架都不是确认风格偏好的证据 |
 
 检查与保存使用同一记录和文章类型：
 
 ```bash
-python3 {skill_root}/scripts/check_article.py {temp}/final.md --strict --article-type {type} --draft {temp}/draft.md --review {temp}/review.json
-python3 {skill_root}/scripts/save_article.py --article-type {type} --draft {temp}/draft.md --review {temp}/review.json < {temp}/final.md
+python3 "{skill_root}/scripts/check_article.py" "{temp}/final.md" --strict --article-type {type} --draft "{temp}/draft.md" --review "{temp}/review.json"
+python3 "{skill_root}/scripts/save_article.py" --workspace "{workspace}" --article-type {type} --draft "{temp}/draft.md" --review "{temp}/review.json" < "{temp}/final.md"
 ```
 
 用户指定保存目录时额外传 `--output-dir` 或 `--output`。完整新稿只在对话交付时仍执行第一条命令。范围受限的已有文章修订不加 `--strict`，但交付修订全文仍传 `--draft` 和 `--review`。单独机械诊断可以不传记录，诊断成功不得作为交付许可。
 
-记录校验检查缺项、全文覆盖、引文、未处理问题和稿件/规则的一致性；它不能证明 Agent 确实阅读、独立判断或已经像瓜哥。不得将“记录有效”报告成“风格已被脚本认证”。严禁绕过保存或检查入口直接写终稿来省略审校。
+记录校验检查缺项、全文覆盖、引文、未处理问题和稿件/规则的一致性；它不能证明 Agent 确实阅读、独立判断或已经像当前作者。不得将“记录有效”报告成“风格已被脚本认证”。严禁绕过保存或检查入口直接写终稿来省略审校。
 
 ## 用户可见结果
 

@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from prepare_research import PreflightError, inventory, route, validate_preflight
 
@@ -23,6 +24,17 @@ class PreflightTests(unittest.TestCase):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
         return p
+
+    def test_default_workspace_is_current_directory_and_can_be_overridden(self):
+        self.add()
+        with patch("prepare_research.Path.cwd", return_value=self.workspace):
+            self.assertEqual(inventory()["workspace"], str(self.workspace))
+            other = self.workspace / "other"
+            self.assertEqual(inventory(other)["workspace"], str(other))
+            self.assertFalse(other.exists())
+        data = route(self.manifest(), self.workspace)
+        del data["workspace"]
+        self.assertTrue(validate_preflight(data, data["topic"], "publish_mode"))
 
     def manifest(self):
         data = inventory(self.workspace)

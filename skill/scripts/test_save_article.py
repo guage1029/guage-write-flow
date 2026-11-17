@@ -103,4 +103,24 @@ with TemporaryDirectory() as directory:
         assert result.returncode != 0, (result.stdout, result.stderr)
         assert len(list(Path(directory).glob("*.md"))) == 1
 
+with TemporaryDirectory() as directory:
+    root = Path(directory).resolve()
+    workspace = root / "稿件's workspace"
+    workspace.mkdir()
+    reviewed = review_args(root, article)
+    command = [sys.executable, str(script), "--draft", reviewed[1], "--review", reviewed[3]]
+    result = subprocess.run(command, cwd=workspace, input=article, capture_output=True, text=True)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert len(list((workspace / "output").glob("*.md"))) == 1
+    other = root / "explicit"
+    result = subprocess.run(command + ["--workspace", str(other)], cwd=workspace, input=article, capture_output=True, text=True)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert len(list((other / "output").glob("*.md"))) == 1
+    result = subprocess.run(command + ["--workspace", str(other), "--output", "custom/final.md"], cwd=workspace, input=article, capture_output=True, text=True)
+    assert result.returncode == 0 and (other / "custom/final.md").read_text(encoding="utf-8") == article
+    blocked = other / "not-a-directory"
+    blocked.write_text("keep", encoding="utf-8")
+    result = subprocess.run(command + ["--workspace", str(blocked)], cwd=workspace, input=article, capture_output=True, text=True)
+    assert result.returncode != 0 and blocked.read_text(encoding="utf-8") == "keep"
+
 print("PASS: naming/collision/strict-save compatibility, article-type passthrough, no write on failed gates")

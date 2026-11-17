@@ -9,7 +9,7 @@ import sys
 
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
-RULE_FILES = ("style-guide.md", "persona.md", "ai-flavor-patterns.md", "checklist.md", "style-review.md", "human-voice-policy.md")
+RULE_FILES = ("style.md", "persona.md", "ai-flavor-patterns.md", "checklist.md", "style-review.md", "human-voice-policy.md")
 VOICE_CHECKS = ("judgment", "presence", "explanation", "rhythm", "restraint", "structure")
 
 

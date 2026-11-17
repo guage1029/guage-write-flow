@@ -24,12 +24,18 @@ TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 cp -r "$SKILL_SRC" "$TEMP_DIR/guage-write-flow"
+cp "$SCRIPT_DIR/../LICENSE" "$SCRIPT_DIR/../README.md" "$TEMP_DIR/guage-write-flow/"
 
 cd "$TEMP_DIR"
-zip -r "$OUTPUT_PATH" guage-write-flow/ \
+zip -r "$TEMP_DIR/$ARCHIVE_NAME" guage-write-flow/ \
     --exclude "*.DS_Store" \
     --exclude "*__pycache__*" \
-    --exclude "*.pyc"
+    --exclude "*.pyc" \
+    --exclude "*/briefs/*" \
+    --exclude "*/research/*" \
+    --exclude "*/output/*" \
+    --exclude "*/.git/*"
+mv -f "$TEMP_DIR/$ARCHIVE_NAME" "$OUTPUT_PATH"
 
 echo "已打包：$OUTPUT_PATH"
 echo "包含内容："

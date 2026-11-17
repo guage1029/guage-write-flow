@@ -2,6 +2,7 @@
 """Validate research records from a file or stdin; never writes runtime files."""
 import argparse
 import json
+import re
 import sys
 from datetime import date, datetime
 from urllib.parse import urlparse
@@ -38,15 +39,16 @@ def validate_data(data, today=None):
     if not isinstance(data, dict):
         return ["顶层必须是 JSON 对象"]
 
-    def check_date(value, label):
+    def check_date(value, label, max_age=None):
         try:
-            parsed = date.fromisoformat(value) if isinstance(value, str) else None
+            parsed = date.fromisoformat(value) if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) else None
         except ValueError:
             parsed = None
         if parsed is None:
             errors.append(f"{label}: 日期必须为非空 YYYY-MM-DD")
-        elif not 0 <= (today - parsed).days <= MAX_AGE_DAYS:
-            errors.append(f"{label}: 日期在未来或超过 {MAX_AGE_DAYS} 天")
+        elif parsed > today or (max_age is not None and (today - parsed).days > max_age):
+            errors.append(f"{label}: 日期在未来或超过 {max_age} 天" if max_age is not None else f"{label}: 日期不得在未来")
+        return parsed
 
     def records(key):
         value = data.get(key)
@@ -63,7 +65,7 @@ def validate_data(data, today=None):
     errors.extend(validate_preflight(data.get("preflight"), data.get("topic"), mode))
     if not text(data.get("topic_type")) or data.get("topic_type") not in {"product", "concept", "open-source", "news"}:
         errors.append("topic_type: 无效主题类型")
-    check_date(data.get("research_date"), "research_date")
+    research_date = check_date(data.get("research_date"), "research_date", MAX_AGE_DAYS)
     attempts = records("search_attempts")
     previous = {}
     discovered = set()
@@ -110,7 +112,13 @@ def validate_data(data, today=None):
         by_url[source_url] = source
         if not text(source.get("title")) or str(source.get("tier")) not in {"1", "2a", "2b", "3", "4"}:
             errors.append(f"{label}: title/tier 无效")
-        check_date(source.get("source_date"), label)
+        if "source_date" not in source:
+            errors.append(f"{label}: 必须记录 source_date，原文无日期时使用 null，不得用访问日期替代")
+        elif source["source_date"] is not None:
+            check_date(source["source_date"], f"{label}.source_date")
+        verified = check_date(source.get("verified_at"), f"{label}.verified_at")
+        if verified and research_date and verified > research_date:
+            errors.append(f"{label}: 核验时间不得晚于 research_date")
         provider = source.get("discovered_by")
         if provider != "direct" and (not text(source.get("task_id")) or not text(provider) or (source.get("task_id"), provider, source_url) not in discovered):
             errors.append(f"{label}: 找不到对应搜索结果记录；已知 URL 使用 direct")
@@ -130,6 +138,11 @@ def validate_data(data, today=None):
             ids.add(claim_id)
         if not text(claim.get("claim_text")) or claim.get("status") != "supported":
             errors.append(f"{label}: 可用事实必须非空且 supported；缺口放 excluded_claims")
+        fact_type = claim.get("fact_type", "dynamic")
+        if not text(fact_type) or fact_type not in {"dynamic", "event", "stable"}:
+            errors.append(f"{label}: fact_type 必须为 dynamic/event/stable；省略时按 dynamic 检查")
+        if fact_type == "event":
+            check_date(claim.get("event_date"), f"{label}.event_date")
         source_url = claim.get("source_url")
         source = by_url.get(source_url) if isinstance(source_url, str) else None
         if source is None:
@@ -139,6 +152,8 @@ def validate_data(data, today=None):
                 errors.append(f"{label}: 事实必须由一致的 Tier 1/2a 来源支撑")
             if claim.get("source_date") != source.get("source_date"):
                 errors.append(f"{label}: 来源日期不一致")
+            if fact_type == "dynamic":
+                check_date(source.get("verified_at"), f"{label}: 易变事实的 verified_at", MAX_AGE_DAYS)
         if not text(claim.get("evidence_quote")):
             errors.append(f"{label}: 缺少 evidence_quote")
 

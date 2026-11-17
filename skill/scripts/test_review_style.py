@@ -1,4 +1,4 @@
-"""Synthetic review records test the gate, not whether prose sounds like Guage."""
+"""Synthetic review records test the gate, not whether prose matches the configured style."""
 import json
 from pathlib import Path
 import subprocess
@@ -45,7 +45,7 @@ class ReviewTests(unittest.TestCase):
         mutations = [
             lambda r: r.update(draft_sha256="stale"),
             lambda r: r.update(final_sha256="stale"),
-            lambda r: r["rules_sha256"].update({"style-guide.md": "stale"}),
+            lambda r: r["rules_sha256"].update({"style.md": "stale"}),
             lambda r: r["blocks"].pop(),
             lambda r: r["blocks"][0].update(status="pending"),
             lambda r: r["blocks"][0].update(reason=""),

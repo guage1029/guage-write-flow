@@ -28,6 +28,14 @@ VALID_TOOLS="hermes claude-code codex custom auto skip"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --tool|--workspace|--skills-dir)
+            if [ $# -lt 2 ] || [ -z "$2" ] || [[ "$2" == --* ]]; then
+                echo "错误：$1 需要非空参数值" >&2
+                exit 1
+            fi
+            ;;
+    esac
+    case "$1" in
         --tool)
             TOOL="$2"
             if [[ ! " $VALID_TOOLS " =~ " $TOOL " ]]; then
@@ -182,53 +190,25 @@ if [ "$TOOL" != "skip" ]; then
     DEST="$SKILLS_BASE/$SKILL_NAME"
 fi
 
-# ─── 解析 workspace 路径 ─────────────────────────────────────────────────────
-
-if [ -n "$WORKSPACE_ARG" ]; then
-    WORKSPACE_PATH="$WORKSPACE_ARG"
-elif [ -n "$GUAGE_WRITE_FLOW_WORKSPACE" ]; then
-    WORKSPACE_PATH="$GUAGE_WRITE_FLOW_WORKSPACE"
-    echo "检测到环境变量 GUAGE_WRITE_FLOW_WORKSPACE，workspace：$WORKSPACE_PATH"
-elif [ -n "$AI_WRITE_FLOW_WORKSPACE" ]; then
-    WORKSPACE_PATH="$AI_WRITE_FLOW_WORKSPACE"
-    echo "检测到环境变量 AI_WRITE_FLOW_WORKSPACE，workspace：$WORKSPACE_PATH"
-else
-    printf "请输入 workspace 路径（存放 briefs/research/output 的目录）：\n> "
-    read -r WORKSPACE_PATH
-    WORKSPACE_PATH="${WORKSPACE_PATH/#\~/$HOME}"
-    if [ -z "$WORKSPACE_PATH" ]; then
-        echo "错误：未提供 workspace 路径。"
-        echo "提示：可设置环境变量 GUAGE_WRITE_FLOW_WORKSPACE 后重新运行，或使用 --workspace 参数。"
-        exit 1
-    fi
-fi
-
-WORKSPACE_PATH="$(python3 - "$WORKSPACE_PATH" <<'PY'
+# --workspace 保留为可选目录初始化，不再绑定安装副本的运行路径。
+WORKSPACE_PATH=""
+if [ -n "$WORKSPACE_ARG" ] || [ "$TOOL" = "skip" ]; then
+    WORKSPACE_PATH="$(python3 - "$WORKSPACE_ARG" <<'PYWORKSPACE'
 from pathlib import Path
 import sys
-print(Path(sys.argv[1]).expanduser().resolve())
-PY
+print(Path(sys.argv[1] or Path.cwd()).expanduser().resolve())
+PYWORKSPACE
 )"
-
-echo ""
-
-# ─── 初始化 workspace ────────────────────────────────────────────────────────
-
-echo "正在初始化 workspace..."
-mkdir -p "$WORKSPACE_PATH/briefs"
-mkdir -p "$WORKSPACE_PATH/research"
-mkdir -p "$WORKSPACE_PATH/output"
-
-echo "  ✓ briefs/    已就绪（放入写作素材）"
-echo "  ✓ research/  已就绪（调研 JSON 输出）"
-echo "  ✓ output/    已就绪（成品文章输出）"
-echo ""
+    mkdir -p "$WORKSPACE_PATH/briefs" "$WORKSPACE_PATH/research" "$WORKSPACE_PATH/output"
+    echo "Workspace initialized: $WORKSPACE_PATH"
+    echo "此参数仅初始化目录；运行时请从该目录启动任务，或向 Agent 明确指定工作区。"
+fi
 
 # ─── 安装 Skill ──────────────────────────────────────────────────────────────
 
 if [ -n "$DEST" ]; then
     if [ -d "$DEST" ]; then
-        printf "检测到已安装的旧版本 %s，是否覆盖？(y/n) " "$DEST"
+        printf "检测到已安装的旧版本 %s，是否覆盖？个人配置将被替换，请先备份 persona.md 和 style.md。(y/n) " "$DEST"
         read -r OVERWRITE
         if [ "$OVERWRITE" != "y" ]; then
             echo "已取消覆盖，保留旧版本。"
@@ -243,33 +223,14 @@ if [ -n "$DEST" ]; then
         --exclude='.DS_Store' \
         --exclude='__pycache__/' \
         --exclude='*.pyc' \
+        --exclude='briefs/' \
+        --exclude='research/' \
+        --exclude='output/' \
         "$SKILL_SRC/" "$DEST/"
 
-    # Keep the installed policy and both script defaults on the same workspace.
-    python3 - "$DEST" "$WORKSPACE_PATH" <<'PY'
-from pathlib import Path
-import sys
-
-root, workspace = Path(sys.argv[1]), Path(sys.argv[2])
-replacements = {
-    "references/workspace-config.md": (
-        "~/Documents/workspace/guage-write-flow", str(workspace)),
-    "scripts/prepare_research.py": (
-        'DEFAULT_WORKSPACE = Path.home() / "Documents" / "workspace" / "guage-write-flow"',
-        f"DEFAULT_WORKSPACE = Path({str(workspace)!r})"),
-    "scripts/save_article.py": (
-        'DEFAULT_OUTPUT_DIR = Path.home() / "Documents" / "workspace" / "guage-write-flow" / "output"',
-        f"DEFAULT_OUTPUT_DIR = Path({str(workspace / 'output')!r})"),
-}
-for relative, (old, new) in replacements.items():
-    path = root / relative
-    content = path.read_text(encoding="utf-8")
-    if old not in content:
-        raise SystemExit(f"安装模板缺少工作区标记：{relative}")
-    path.write_text(content.replace(old, new), encoding="utf-8")
-PY
+    cp "$SCRIPT_DIR/../LICENSE" "$DEST/LICENSE"
+    cp "$SCRIPT_DIR/../README.md" "$DEST/README.md"
     echo "Skill installed: $DEST"
-    echo "  ✓ 工作区配置与脚本默认路径已绑定：$WORKSPACE_PATH"
 fi
 
 # ─── 完成提示 ────────────────────────────────────────────────────────────────
@@ -279,22 +240,13 @@ echo "========================================="
 echo " 安装完成！"
 echo "========================================="
 echo ""
-echo "Workspace initialized: $WORKSPACE_PATH"
-echo ""
-echo "下一步："
+echo "运行时工作区：用户明确指定的路径优先，否则使用任务启动目录。"
 echo ""
 if [ -n "$DEST" ]; then
-    echo "  1. 按需调整作者画像："
-    echo "     $DEST/references/persona.md"
-    echo ""
-    echo "  2. 将写作素材放入 workspace/briefs/："
-    echo "     $WORKSPACE_PATH/briefs/"
-    echo ""
-    echo "  3. 在 Agent 中说："
-    echo "     '帮我写一篇关于 [主题] 的文章'"
-    echo "     或 '帮我审校这篇文章，降低 AI 味'"
+    echo "按需修改作者配置："
+    echo "  $DEST/references/persona.md"
+    echo "  $DEST/references/style.md"
+    echo "在稿件目录启动 Agent，或明确指定工作区，再提出写作/审校请求。"
 else
-    echo "  已跳过 Skill 安装，仅完成 workspace 初始化。"
-    echo "  如需安装，请重新运行并选择安装目标。"
+    echo "未安装 Skill；如需安装，请重新运行并选择安装目标。"
 fi
-echo ""

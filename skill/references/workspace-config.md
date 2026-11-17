@@ -1,62 +1,45 @@
-# workspace-config.md
+# workspace-config.md — 本轮工作区与保存规则
 
-## Workspace Resolution
+## 路径解析
 
-The shared default workspace is:
+本轮开始时按以下顺序解析工作区，转换为绝对路径后固定使用：
 
-```text
-~/Documents/workspace/guage-write-flow
-```
+1. 用户在本次任务中明确指定的工作区。
+2. 本次任务启动时所在的工作目录。
 
-The installer replaces this default with the selected absolute workspace path in the installed copy and binds the script defaults to the same path. Every agent using this skill must read this file and use the same path. Do not select a different workspace based on agent-local environment variables or machine-local discovery.
+不使用个人硬编码路径，不从环境变量或安装时配置读取默认工作区。宿主没有明确工作目录时先向用户询问，不猜测个人目录或使用 Skill 安装目录。脚本直接调用时以进程当前工作目录为默认值；Agent 即使执行过程中切换目录，也必须向预检与保存脚本传入同一个已解析的 `--workspace`。
 
-Resolve the runtime workspace at the start of every session using this priority order:
+所有带路径的命令参数都加引号，以支持空格、中文和标点。
 
-1. If the user explicitly provides a workspace path in this conversation → use that path
-2. Otherwise → use the shared default workspace above
+## 运行目录
 
-The final Markdown for a completed longform article is saved by default after Step 5 passes. Research JSON, outlines, and review reports are not saved by default. Do not write runtime files into the installed Skill directory. Draft/rewrite/review records use a system temporary directory and are cleaned after completion unless retention is requested. Authorized maintenance of the persistent style handbook and its Skill patch version is a separate exception; follow style-guide.md and do not publish private feedback.
+| 目录 | 用途 |
+|---|---|
+| `briefs/` | 候选材料池；逐项判断本轮相关性与读取状态 |
+| `research/` | 仅用户明确要求保存研究结果时使用 |
+| `output/` | 通过审校和检查后的最终 Markdown |
 
-## Runtime Directories
+`briefs/` 不存在视为空材料池，预检不创建目录；读取失败或相关性不明时报告具体缺口，不能声称预检通过。不写入、删除或移动素材。
 
-| Directory | Purpose |
-|-----------|---------|
-| `briefs/` | Candidate material pool. Only the current topic's selected, relevant, readable materials constrain this run. Accept PDFs, Markdown, text files, screenshots, DOCX, spreadsheets, JSON, and web excerpts. |
-| `research/` | Research JSON, only when the user explicitly asks to save research results. |
-| `output/` | Final longform Markdown articles, written after quality checks; other content only when the user explicitly asks to save it. |
+## 素材预检
 
-## Save Destination
+运行 `prepare_research.py inventory --workspace "{workspace}"`，再实际读取、分类候选，填写路径、SHA-256、topic、relevance、read_status、reason、summary。将完整清单从 stdin 交给 `route --workspace "{workspace}"`，原样保留输出为研究 JSON 的 preflight；校验器重新检查清单、哈希与模式。
 
-- A completed longform article defaults to `~/Documents/workspace/guage-write-flow/output/`; if the user specifies an article path or workspace, use it.
-- Name articles `{Asia/Shanghai YYYYMMDD}-{title-slug}.md`. Slugs use lowercase text, retain Unicode letters and digits, replace runs of punctuation/whitespace with one hyphen, and trim edge hyphens. `scripts/save_article.py` implements this rule, date selection, strict validation, and collision handling; use it for every completed longform article so agents produce the same path.
-- If a file with that name already exists, append `-2`, `-3`, etc. before `.md`; never overwrite by default.
-- Do not save briefs, outlines, research JSON, or review reports unless the user asks.
-- A saved article does not imply saving its research JSON.
+默认覆盖 briefs/ 中的全部可见常规文件；忽略系统隐藏项。候选非空不代表都与本轮相关。相关可读素材进入 brief_first_verify_mode；没有相关素材进入 publish_mode；未解析或相关性待确认则阻断。
 
-## Multi-Format Brief Handling
+用户明确选取文件时，inventory 可重复传 `--select`，保留非空 selected_paths；文件可位于池外。只有用户明确要求完全不用本地素材时才允许 selected_paths=[]，并同时记录 selection_reason 和真实 selection_source_ref，不得用空数组绕过共享池。自动盘点不跟随符号链接，需要用户明确选择实际文件。
 
-Run `prepare_research.py inventory --workspace <resolved-workspace>` to list visible regular candidates and hashes. Hidden files/directories such as `.DS_Store` are not materials. A nonempty shared pool does not select the research mode by itself.
+文件类型的内容提取由宿主提供；预检脚本只盘点、计算哈希与路由，不内置 PDF、DOCX、图片或表格解析器。无法读取的文件列入未解析清单。
 
-For each current candidate, generate a material entry:
+## 保存位置
 
-- **文件名**：原始文件名
-- **类型**：PDF / Markdown / TXT / DOCX / 图片 / 表格 / JSON / 其他
-- **读取状态**：成功 / 失败
-- **提取摘要**：主要内容要点（100字以内）
-- **可信度备注**：来源性质（用户原创素材、截图、第三方文章等）
-- **本轮相关性**：relevant / irrelevant / uncertain，附明确 reason 与 summary
-- **文件绑定**：保留 inventory 的绝对 path 与 sha256，文件变动后重新读取、分类和预检
+- 完整长文通过 Step 5 后，由 `save_article.py --workspace "{workspace}"` 默认保存到该工作区的 output/。用户要求只在对话交付时不保存，但仍执行相应检查。
+- 单独指定 `--output` 或 `--output-dir` 只改变保存位置，不反推或改变素材工作区；相对输出路径相对于已解析工作区。两者不能同时使用。
+- 文件名为 `{Asia/Shanghai YYYYMMDD}-{title-slug}.md`，保留 Unicode 字母与数字，标点和空白折叠为连字符。重名自动追加 -2、-3，不覆盖。
+- 默认不保存骨架、研究 JSON、审校报告或中间稿；用户明确要求时按指定位置保存。审校报告不混入最终文章。
+- 初稿、改写稿与审校记录使用系统临时目录，完成后清理，用户要求保留时例外。
+- 路径不可写时如实报告，不改存到安装目录，不谎报成功。
 
-Files that cannot be parsed must appear in an "未解析文件清单" — never silently skip them.
+## 维护边界
 
-Pass the classified manifest to `prepare_research.py route` via stdin. Keep its complete output as the research JSON's `preflight`; the validator recomputes it against current files. Relevant readable inputs use `brief_first_verify_mode`; no relevant inputs use `publish_mode`, including when every old shared file is irrelevant. Uncertain or failed reads produce an explicit unresolved list and block a claimed preflight pass.
-
-When the user explicitly selects files, run inventory with repeatable `--select /absolute/file`, retain the returned nonempty `selected_paths` and cover that selection exactly. Explicitly selected existing files may be outside the shared pool. `selected_paths: []` is allowed only with nonempty `selection_reason` and `selection_source_ref` recording the user's express instruction to use no local materials. Otherwise omit selected_paths and cover the full visible pool; do not silently replace it with an empty selection. Source references are recorded instructions, not independent identity proof.
-
-Inventory, route and validation are read-only, emit stdout and do not save research or manipulate the pool. A missing workspace/briefs directory is an empty candidate pool and is not created by preflight. Unreadable directories, changed hashes, missing entries or duplicate paths require correction. Automatically discovered symlinks require explicit selection of the actual files instead of silently following them.
-
-## Safety Rules
-
-- Never delete or overwrite files in `briefs/`.
-- Never overwrite an existing file without explicit instruction; use a non-conflicting filename instead.
-- Never hardcode API keys or credentials in any output file.
+运行产物不得写入 Skill 安装目录。用户明确要求写回配置或已授权持续维护时，可以更新 persona.md、style.md 及必要的补丁版本；本轮局部反馈默认不持久化。私人配置不自动进入公共模板或推送远端。

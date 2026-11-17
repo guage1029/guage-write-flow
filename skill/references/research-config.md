@@ -8,14 +8,15 @@
 ## 搜索工具与执行顺序
 
 - 每个独立调研问题使用一个 `task_id`。默认 Tavily → Exa → Agent 内置 Web Search；不强制三种工具全跑。
-- Tavily 使用已配置的搜索工具或 `tvly search --json`；Exa 使用 `web_search_exa`；内置 Web 使用运行环境提供的搜索能力。不可用时记录 `unavailable` 和真实原因，不自动安装、登录或修改工具配置。本工作流的可用性检查与降级规则优先于搜索辅助 skill 的自动安装要求。
-- 前工具不可用、报错、无结果、无一手来源或证据不足时，记录对应 outcome 和 reason 后进入下一工具；不得跳级。前工具成功后，只有独立复核需要才换工具，并填写 `advance_reason: independent_crosscheck`。
+- Tavily 使用已配置的搜索工具或 `tvly search --json`；Exa 使用宿主已配置的搜索工具（如 `web_search_exa`）；内置 Web 使用运行环境提供的搜索能力。先发现实际可用能力，工具名称可能随宿主不同。不可用时记录 `unavailable` 和真实原因，不自动安装、登录或修改工具配置。本工作流的可用性检查与降级规则优先于搜索辅助 skill 的自动安装要求。
+- 前工具未配置、受网络或权限限制而不可用、报错、无结果、无一手来源或证据不足时，记录对应 outcome 和 reason 后进入下一工具；不得跳级。前工具成功后，只有独立复核需要才换工具，并填写 `advance_reason: independent_crosscheck`。
 - 用户给出或素材包含的已知 URL 直接读取，记为 `discovered_by: direct`，无需为了填记录而搜索。
 - 搜索发现页面后读取来源原文：Tavily Extract、Exa Fetch 或内置 Web Fetch/Open。Tavily 搜索实际返回完整原文时可记为 `tavily_search_raw`，不重复抓取；摘要或 highlights 不算原文。full_text 表示读取原始页面内容，可为相关原文片段，不要求抓取整个站点。
 - 独立问题可以并行，但每个 task_id 内部保持上述顺序。该 skill 不自动要求组建多智能体团队。
 - 所有拟用于写作的事实必须关联成功读取的来源原文。工具排名不改变来源 Tier。
 - 每项拟用事实有来源、必要的交叉核查完成且无未解决差异时停止搜索；不足时只补查缺口。
-- 如所有工具都不可用，保留失败记录、报告阻塞，不伪造调研成功。
+- Tavily、Exa 是可选能力，不是必装依赖；只有内置 Web 可用也按记录降级后执行。已确认不可用时复用本轮可用性判断，不为了填记录重复发起注定失败的请求，也不得虚构实际调用。
+- 如所有工具都不可用且现有来源无法完成核验，保留失败记录、报告阻塞，不伪造调研成功。局部审校或只检查不因缺少搜索能力自动启动完整调研。
 
 **可验证边界：** 验证器检查 Agent 提交的记录及引用一致性，无法独立证明真实工具调用或来源权威性。不得虚构工具记录、读取状态或来源日期。
 
@@ -26,7 +27,7 @@
 JSON 在当前上下文保留，不默认落盘。每轮通过标准输入运行：
 
 ```bash
-python3 {skill_root}/scripts/validate_research.py - --report
+python3 "{skill_root}/scripts/validate_research.py" - --report
 ```
 
 实际 JSON 从 stdin 传入；不要把示例占位符当成真实记录。脚本输出固定五部分：本轮目标、实际改动、验证结果、风险与阻塞、下一轮建议，以及独立计算的通过/失败结论。用户报告中用事实 ID 与来源链接说明结论；调研没有改文件时如实注明。
@@ -45,9 +46,9 @@ python3 {skill_root}/scripts/validate_research.py - --report
 
 ### 素材预检是模式的唯一计算入口
 
-先运行 `python3 {skill_root}/scripts/prepare_research.py inventory --workspace {workspace}`，再阅读、分类返回的候选。默认覆盖共享 briefs/ 的全部可见常规文件，忽略系统隐藏项；显式 selected_paths 则覆盖用户本轮选定的文件。脚本不做语义分类。
+先运行 `python3 "{skill_root}/scripts/prepare_research.py" inventory --workspace "{workspace}"`，再阅读、分类返回的候选。默认覆盖共享 briefs/ 的全部可见常规文件，忽略系统隐藏项；显式 selected_paths 则覆盖用户本轮选定的文件。脚本不做语义分类。
 
-将下列清单从 stdin 传给 `prepare_research.py route --workspace {workspace}`；sha256 必须复制对应 inventory 的实际值，不能使用占位符：
+将下列清单从 stdin 传给 `prepare_research.py route --workspace "{workspace}"`；sha256 必须复制对应 inventory 的实际值，不能使用占位符：
 
 ```json
 {
@@ -101,7 +102,7 @@ relevance 取 relevant/irrelevant/uncertain；read_status 取 success/failed。�
 - 用户截图和公开资料表述不一致
 - 产品名称相近但主体不同
 - 功能演示成立，但官方定位描述不同
-- 时间相关信息（版本、定价、可用性）无法确认最新性
+- 本轮拟声称当前状态的版本、定价或可用性无法确认
 
 ---
 
@@ -109,9 +110,9 @@ relevance 取 relevant/irrelevant/uncertain；read_status 取 success/failed。�
 
 ```
 Layer 1  主题解析      判断 topic_type → 确定权威来源形态
-Layer 2  来源分层      Tier 1-4，事实结论只接受 Tier 1/2 支撑
+Layer 2  来源分层      Tier 1-4，事实结论只接受 Tier 1/2a 支撑
 Layer 3  Claim 核查    原子级事实拆解 + supported/unverified/contradicted
-Layer 4  时效门禁      30 天统一硬门禁，不达标直接阻断
+Layer 4  时效门禁      按事实类型核验时效，易变事实在 30 天内复核
 ```
 
 ---
@@ -164,10 +165,6 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
     "unresolved_materials": [],
     "issues": []
   },
-  "freshness_policy": {
-    "max_age_days": 30,
-    "blocking": true
-  },
   "tier_1_candidates": [
     {
       "field": "string",
@@ -191,7 +188,8 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
       "tier": 1,
       "title": "string",
       "url": "https://official.example/docs",
-      "source_date": "YYYY-MM-DD",
+      "source_date": null,
+      "verified_at": "YYYY-MM-DD",
       "task_id": "r001",
       "discovered_by": "tavily",
       "fetched_by": "web_fetch",
@@ -203,9 +201,10 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
     {
       "claim_id": "c001",
       "claim_text": "string",
+      "fact_type": "dynamic",
       "tier": 1,
       "source_url": "https://official.example/docs",
-      "source_date": "YYYY-MM-DD",
+      "source_date": null,
       "evidence_quote": "string",
       "status": "supported | unverified | contradicted"
     }
@@ -215,7 +214,7 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
     "unsupported_claim_count": 0,
     "contradiction_count": 0,
     "discrepancy_count": 0,
-    "stale_source_count": 0,
+    "stale_dynamic_claim_count": 0,
     "passed": true
   },
   "search_attempts": [
@@ -249,14 +248,24 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
 - `sources[]` URL 唯一；搜索发现的 URL 必须对应 search_attempts 的 task_id、provider、result_urls。已知 URL 使用 direct。fetched_by 取 tavily_extract/exa_fetch/web_fetch/tavily_search_raw。
 - `claims[]` 仅包含可用的 supported 事实，claim_id 唯一，source_url 必须已登记，tier 和 source_date 与来源一致，evidence_quote 非空。候选与排除项不混入此数组。
 - `tier_1_candidates[]`、`discrepancies[]`、`excluded_claims[]` 均为必填数组，无则空数组。未解决的 discrepancy 阻断。
-- 非 explore 模式至少一条可用事实。空日期、未来日期、摘要证据、未知来源及不合格 Tier 均阻断。quality_check.passed 是提交声明，不能覆盖脚本独立检查结果。
-- 历史研究 JSON 允许保留旧的 `output_mode`、`card_safe_claims` 等图卡字段，不迁移历史记录，不豁免 `preflight`、来源与 30 天时效等通用门禁。
+- 非 explore 模式至少一条可用事实。无效或未来日期、缺少 verified_at、过期易变事实、摘要证据、未知来源及不合格 Tier 均阻断；未标日期的来源用 source_date: null。quality_check.passed 是提交声明，不能覆盖脚本独立检查结果。
+- 历史研究 JSON 允许保留旧的 `output_mode`、`card_safe_claims` 等图卡字段，不迁移历史记录，不豁免 `preflight`、来源与分类时效等通用门禁。
 
-## Layer 4：时效门禁
+## Layer 4：按事实类型核验时效
 
-- **30 天统一硬门禁**，无例外
-- 背景材料可用旧资料，但必须显式标注 `"type": "background"`，**不得进入发布正文**
-- 任何用于核验的来源没有明确日期 → 视为不合格；列为缺口，不能编造日期。计算日期以 Asia/Shanghai 为准。
+来源的 `source_date` 只记录原文明确的发布日期或更新日期，无法得知时明确使用 null，不能填空字符串或用访问日期代替。每条来源都记录实际读取核验时间 `verified_at`，不得在未来或晚于 research_date。research_date 是本轮调研时间，重新用于写作时仍须在 30 天内。
+
+每条 claim 使用 `fact_type`（省略时按 dynamic 保守检查）：
+
+| 类型 | 范围 | 门禁 |
+|---|---|---|
+| `dynamic` | 当前版本、价格、功能、额度、可用性，以及“最新”等当前状态断言 | 来源 verified_at 必须在写作前 30 天内；实际核对当前版本和适用条件，不能只打开旧公告就声称已确认现状 |
+| `event` | 有明确时间的发布、更新等历史事件 | 记录真实 event_date；不因年代久远排除，但不能据此声称仍是最新状态 |
+| `stable` | 技术原理、经典论文、稳定方法与背景知识 | 不按来源年龄阻断；检查原始来源、适用范围和是否已有修正 |
+
+官方文档即使未标发布日期，也可在成功读取原文、核对版本与适用条件后支撑相应事实；仍须符合 Tier 1/2a、引用和 verified_at 要求。经典资料与历史背景可以进入正文，按内容需要交代年代和范围。不得把易变事实标为 stable/event 来绕过近期核验。
+
+claim.source_date 必须与其来源一致（可同为 null）；event_date 与来源发布日期是不同字段，不应互相替代。核验器能检查日期和记录一致性，不能独立证明真实调用、事实分类或“当前适用”的语义判断。旧研究 JSON 缺 verified_at 时补做实际核验，不复制今天日期冒充已核验。
 
 ---
 
@@ -270,7 +279,8 @@ Tier 2b 不得作为高风险字段的充分来源，即使该来源看起来"�
 
 - `status == "unverified"` 的 claim 存在
 - `status == "contradicted"` 的 claim 存在
-- 任何 claim 的 `source_date` 超过 30 天
-- 任何来源没有明确日期
+- 易变事实关联来源的 `verified_at` 超过 30 天或缺失
+- 日期无效、在未来；来源未记录 source_date（未知时应为 null）
+- event 事实缺真实 event_date，或事实类型无效
 - `quality_check.passed == false`
-- 发布正文中出现未标注的旧资料
+- 将历史事件或旧资料冒充当前状态，或没有核对其适用范围

@@ -8,8 +8,6 @@ from pathlib import Path
 import sys
 
 
-# The installer binds this default to the selected workspace in the installed copy.
-DEFAULT_WORKSPACE = Path.home() / "Documents" / "workspace" / "guage-write-flow"
 RELEVANCE = {"relevant", "irrelevant", "uncertain"}
 
 
@@ -26,7 +24,9 @@ def require(condition, message):
         raise PreflightError(message)
 
 
-def workspace_path(value):
+def workspace_path(value=None):
+    if value is None:
+        value = Path.cwd()
     require(isinstance(value, (str, Path)) and str(value).strip(), "workspace 必须是非空目录路径")
     workspace = Path(value).expanduser().resolve()
     require(not workspace.exists() or workspace.is_dir(), "workspace 不是目录")
@@ -53,7 +53,7 @@ def file_record(path):
         return {"path": str(path), "sha256": None, "read_error": str(exc)}
 
 
-def inventory(workspace=DEFAULT_WORKSPACE, selected_paths=None, allow_empty_selection=False):
+def inventory(workspace=None, selected_paths=None, allow_empty_selection=False):
     workspace = workspace_path(workspace)
     paths = []
     if selected_paths is not None:
@@ -85,7 +85,7 @@ def inventory(workspace=DEFAULT_WORKSPACE, selected_paths=None, allow_empty_sele
     return result
 
 
-def route(manifest, workspace=DEFAULT_WORKSPACE):
+def route(manifest, workspace=None):
     require(isinstance(manifest, dict), "素材清单必须是 JSON 对象")
     require(text(manifest.get("topic")), "topic 必须非空")
     workspace = workspace_path(workspace)
@@ -143,7 +143,8 @@ def validate_preflight(preflight, topic, mode):
     if not isinstance(preflight, dict):
         return ["preflight: 缺少脚本生成的素材预检；旧研究记录重新用于写作前须补预检"]
     try:
-        current = route(preflight, preflight.get("workspace"))
+        require(text(preflight.get("workspace")) and Path(preflight["workspace"]).is_absolute(), "preflight.workspace 必须是已解析的绝对路径")
+        current = route(preflight, preflight["workspace"])
     except (OSError, ValueError, TypeError) as exc:
         return [f"preflight: {exc}"]
     errors = []
@@ -161,7 +162,7 @@ def validate_preflight(preflight, topic, mode):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("inventory", "route"))
-    parser.add_argument("--workspace", default=str(DEFAULT_WORKSPACE))
+    parser.add_argument("--workspace", help="本轮工作区；省略时使用进程当前工作目录")
     parser.add_argument("--select", action="append", help="inventory 的本轮明确选取文件，可重复；route 使用 stdin 的 selected_paths")
     args = parser.parse_args()
     if args.command == "inventory":
